@@ -1,1 +1,61 @@
-git test file
+[사전]
+** OS : ubuntu 24.04 desktop version << test 
+** cpu : 2 core 이상
+** mem : 4 gb 이상 << ubuntu 24.04 version 부터 권장사항
+** disk : 20 gb 이상
+ubuntu 설치....
+
+
+[Virtualbox setting]
+1. NAT Network
+ - 도구 > NAT 네트워크
+   ** 추후 master/worker server 포스포워딩 추가
+ - master/worker vm > 네트워크 'NAT 네트워크'
+
+
+[master/worker 공통]
+1. 공통 package 설치
+ - sudo apt-get install -y net-tools, openssh-server, vim, tree, htop
+
+2. 우분투 방화벽 해제
+ - sudo ufw disable
+ (확인) sudo ufw status
+
+3. hostname
+ - master node server 
+   sudo vi /etc/hostname
+   master
+ - worker node server 
+   sudo vi /etc/hostname
+   node1 / node2
+
+4. hosts 추가
+ - sudo vi /etc/hosts
+ 10.0.2.10 k8s-master
+ 10.0.2.11 k8s-node1
+ 10.0.2.12 k8s-node2
+ ...
+
+5. swap off
+ - sudo swapoff -a
+ - sudo vi /etc/fstab
+   #swap 부분 주석처리
+ (확인) free
+
+6. ntp 설정(time synchronization)
+ - sudo apt-get install -y ntp
+ ## ntp 설치시 time-daemon과 충돌 시 > sudo apt remove systemd-timesyncd
+ - sudo systemctl restart ntp
+ - sudo systemctl status ntp
+ (확인) sudo ntpq -p 
+
+ 7. IP Forwarding 활성화
+  - echo '1' > /proc/sys/net/ipv4/ip_forward
+  (확인) cat /proc/sys/net/ipv4/ip_forward > '1' 출력
+
+ 8. container-runtime 구성(containerd)
+  - cat << EOF | sudo tee /etc/modules-load.d/containerd.conf
+    overlay
+    br_netfilter
+    EOF
+ 
