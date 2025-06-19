@@ -1,0 +1,59 @@
+참고 사이트 : https://junkmm.tistory.com/m/3
+
+Master node 구성
+- cluster 필요 이미지 pull
+sudo kubeadm config images pull --cri-socket /run/containerd/containerd.sock
+
+sudo kubeadm init --apiserver-advertise-address=[마스터 노드 주소] --pod-network-cidr=192.168.0.0/16 --cri-socket /run/containerd/containerd.sock
+ #--pod-network-cidr=192.168.0.0/16 >> containerd 자동 할당 ip
+
+
+#네트워크 플러그인 Calico
+#kubectl 명령을 루트 권한이 아닌 사용자 권한으로도 사용할 수 있도록 설정
+
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.1/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.1/manifests/custom-resources.yaml
+
+## latest version
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.1/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.1/manifests/custom-resources.yaml
+
+##pod network 범위 수정
+ex) 192.168.0.0/16 ->10.10.0.0/16 수정
+sed -i -e 's?192.168.0.0/16?10.10.0.0/16?g' custom-resources.yaml
+kubectl apply -f calico.yaml 
+
+#설치 확인
+watch kubectl get pods -n calico-system
+#마스터 노드 확인
+kubectl get node -o wide
+
+
+Worker node 설정
+Master node 생성할때 발급된 join 토큰을 워커노드에 입력
+
+sudo kubeadm join [ip]:6443 --token [token] --discovery-token-ca-cert-hash sha256:[hash]
+
+#worker node 추가 확인
+kubectl get nodes
+
+
+pod 배포(Nginx)
+kubectl run web --image=nginx
+
+#배포 확인
+kubectl get pod
+
+service 배포
+#service nodeport 생성
+kubectl expose pod web --name=web-svc --type=NodePort --port=80 --target-port=80
+
+#nodeport 확인
+kubectl get svc
+
+웹브라우저 확인
+http://[cluster-ip]:32215 접속 >> nginx page 확인
