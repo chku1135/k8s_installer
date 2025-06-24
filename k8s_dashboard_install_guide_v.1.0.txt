@@ -1,0 +1,141 @@
+kubternetes dashboard install
+
+===================================================================
+##kubectl 자동완성
+echo "source <(kubectl completion bash)" >> ~/.bashrc
+
+#alias 추가
+echo 'alias k=kubectl' >> ~/.bashrc
+
+#k 이후 tap 사용
+echo 'complete -o default -F __start_kubectl k' >> ~/.bashrc
+
+##.bashrc 적용
+source .bashrc
+===================================================================
+
+
+
+#참고 사이트: 
+https://jongsky.tistory.com/113
+https://yhjin.tistory.com/36
+
+#dashboard 설치
+#master or node 설치
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+
+#서비스 확인
+kubectl get svc -n kubernetes-dashboard
+
+#service 설정 수정
+kubectl edit svc kubernetes-dashboard -n kubernetes-dashboard
+
+=============================================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{},"labels":{"k8s-app":"kubernetes-dashboard"},"name":"kubernetes-dashboard","namespace":"kubernetes-dashboard"},"spec":{"ports":[{"port":443,"targetPort":8443}],"selector":{"k8s-app":"kubernetes-dashboard"}}}
+  creationTimestamp: "2023-12-26T07:55:00Z"
+  labels:
+    k8s-app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kubernetes-dashboard
+  resourceVersion: "496361"
+  uid: 227af817-5a33-4ce8-a3dd-adb43030d376
+spec:
+  clusterIP: 10.97.19.146
+  clusterIPs:
+  - 10.97.19.146
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - nodePort: 31000 ##### 수정
+    port: 443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    k8s-app: kubernetes-dashboard
+  sessionAffinity: None
+  type: NodePort ####### 수정
+status:
+  loadBalancer: {}
+=============================================================================================================
+
+#변경 사항 확인
+kubectl get svc -n kubernetes-dashboard
+
+#kubernetes dashboard 접속
+https://NodeIP:NodePort/#login
+
+
+#설치 파일 생성
+vi dashboard-admin.yaml
+
+#dashboard-admin.yaml 입력
+=================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kubernetes-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: kubernetes-dashboard
+=================================================
+
+#설치
+kubectl apply -f dashboard-admin.yaml
+
+#만들어진 대시보드 토큰 값 생성
+kubectl -n kubernetes-dashboard create token admin-user
+
+##쿠버네티스 대시보드 삭제 방법
+kubectl delete namespace kubernetes-dashboard
+
+#쿠버네티스 대시보드 실행방법
+kubectl proxy
+
+#Metrics Server 설치
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+#Metrics Server 확인
+kubectl get deployment metrics-server -n kube-system
+
+#Metrics Server log 확인
+kubectl logs -l k8s-app=metrics-server -n kube-system
+
+##Metrics Server가 작동하지 않을 때의 일반적인 해결책
+만약 Metrics Server가 설치되어 있는데도 여전히 작동하지 않는다면 다음 단계를 시도할 수 있습니다:
+ClusterRoleBinding 설정: Metrics Server가 충분한 권한을 갖고 있는지 확인하세요. 다음 명령어로 클러스터 관리자 권한을 추가합니다:
+kubectl create clusterrolebinding metrics-server:system:auth-delegator --clusterrole=system:auth-delegator --serviceaccount=kube-system:metrics-server
+
+##kubelet 인증 문제 해결: 만약 TLS 인증 문제가 발생하는 경우, Metrics Server가 kubelet API를 올바르게 호출할 수 있도록 kubelet-insecure-tls 옵션을 설정할 수 있습니다. 이 방법은 보안적이지는 않지만 문제를 해결하는 데 도움이 될 수 있습니다.
+먼저 Metrics Server의 Deployment를 수정하세요:
+kubectl edit deployment metrics-server -n kube-system
+그리고 다음 부분을 추가합니다:그런 다음 변경 사항을 저장하고 다시 배포합니다.
+spec:
+  containers:
+  - args:
+    - --kubelet-insecure-tls
+
+#Metrics Server 상태 확인 후 다시 시도 (Pod의 CPU와 메모리 사용량 확인)
+kubectl top pod -n auw-ai
+
+##Custom Resource Definitions (CRDs) 활성화
+Kubernetes 클러스터에 설치된 Custom Resource Definitions (CRDs)가 있다면, Dashboard에서 이를 모니터링하도록 설정할 수 있습니다. CRD를 설치한 후, Dashboard에서 이를 조회하고 관리할 수 있도록 추가 구성을 해야 합니다.
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.6.1/aio/deploy/crd.yaml
+
