@@ -1,0 +1,20 @@
+#troubleshooting
+#container runtime is not running
+sudo rm /etc/containerd/config.toml
+sudo systemctl restart containerd
+sudo kubeadm init
+
+#calico cidr 수정
+
+
+
+## 베이그란트 k8s 구성
+https://velog.io/@dongs52/Vagrant-%EB%A5%BC-%EC%82%AC%EC%9A%A9%ED%95%9C-Kubernetes-%ED%99%98%EA%B2%BD-%EA%B5%AC%EC%84%B1
+
+1. 베이그란트 설치
+https://developer.hashicorp.com/vagrant/install
+ >> os 버전에 맞게 download
+
+or 
+
+https://github.com/sysnet4admin/_Lecture_k8s_starter.kit/tree/main
