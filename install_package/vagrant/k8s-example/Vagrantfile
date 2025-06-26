@@ -1,0 +1,155 @@
+
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+
+# https://github.com/patrickdlee/vagrant-examples/blob/master/example7/Vagrantfile
+
+
+# --------------------------------------------------------------------------------
+# $ # For vagrant < 1.1.5:
+# $ # vagrant gem install vagrant-vbguest
+#
+# $ # For vagrant 1.1.5+ (thanks Lars Haugseth):
+# $ vagrant plugin install vagrant-vbguest
+# --------------------------------------------------------------------------------
+
+
+$V_CPU = "2"
+$V_MEM = "4096"
+$V_BOX = 'ubuntu/jammy64'
+
+$NET_INTERFACE_NAT="eth0"
+# $NET_INTERFACE_BRIDGE="eth1"
+
+# 설정 Yaml 파일 load
+require 'yaml'
+vmconfig = YAML.load_file('vmconfig.yml')
+
+# 초기 값 Load
+$VAGRANTFILE_API_VERSION = vmconfig['vagrant']['version']
+
+$default_network_interface = `ip route | awk '/^default/ {printf "%s", $5; exit 0}'`
+
+# Vagrant 설정.....
+Vagrant.configure($VAGRANTFILE_API_VERSION) do |config|
+
+
+  # ===============================================================================================================================
+  vmconfig["servers"].each do |server|
+    
+    
+    config.vm.define server['hostname'] do |nodeconfig|
+
+      nodeconfig.vm.box = server["box"] ? server["box"] : $V_BOX
+      nodeconfig.vm.hostname = "#{server['hostname']}.box"
+      if server.key?("network")
+        nodeconfig.vm.network server["network"]["mode"], ip: server["network"]["ip"], bridge: server["network"]["bridge"], use_dhcp_assigned_default_route: true
+
+
+        # install net-tools
+        config.vm.provision "shell", run: "always", inline: "apt update -y && apt upgrade -y && apt install net-tools"
+
+        # ---------------------------------------------------------------------------------------------------
+        # https://developer.hashicorp.com/vagrant/docs/networking/public_network#default-network-interface
+        # ---------------------------------------------------------------------------------------------------
+        if server["network"].key?("interface")
+          $interface_nat = server["network"]["interface"]["nat"] ? server["network"]["interface"]["nat"] : $NET_INTERFACE_NAT
+          # default router
+          config.vm.provision "shell", run: "always", inline: "route add default gw #{server["network"]["gw"]}"
+          # delete default gw on eth0(interface of nat)
+          config.vm.provision "shell", run: "always", inline: "eval `route -n | awk '{ if ($8 ==\"#{$interface_nat}\" && $2 != \"0.0.0.0\") print \"route del default gw \" $2; }'`"
+          # default router
+          config.vm.provision "shell", run: "always", inline: "ip route del default via 10.0.2.2 || true"
+        end
+      end
+
+      # config.vm.provision "shell",
+      #     run: "always",
+      #     inline: "route add default gw 192.168.0.1"
+
+      if server.key?("services")
+        server["services"].each do |service|
+          nodeconfig.vm.network "forwarded_port", id: service["id"], guest: service["gport"], host: service["hport"]
+        end
+      end
+
+      nodeconfig.ssh.insert_key = false
+      # ------------------------------------------------------------------------------------
+      # nodeconfig.vm
+      # > https://developer.hashicorp.com/vagrant/docs/vagrantfile/machine_settings
+      # ------------------------------------------------------------------------------------
+      nodeconfig.vm.provider :virtualbox do |vb|
+        vb.name = "004-#{server['hostname']}"
+        # Display the VirtualBox GUI when booting the machine
+        vb.gui = server["gui"] ? server["gui"] : false
+      
+        # Customize the amount of memory on the VM:
+        vb.cpus   = server["cpu"] ? server["cpu"] : $V_CPU 
+        vb.memory = server["ram"] ? server["ram"].to_s : $V_MEM
+      end
+      # nodeconfig.vm.disk :disk, size: "100GB", primary: true
+
+      
+      # Copy Script Files to VM
+      if server.key?("resources")
+        server["resources"].each do |resource|
+          nodeconfig.vm.provision "file", source: "#{resource["src"]}", destination: "#{resource["dest"]}"
+        end
+      end
+      # -------------------------------------------------------------------------------------------------------------
+      #
+
+      # Volume Setting.
+      if server.key?("volumes")
+        server["volumes"].each do |volume|
+          host_path = volume.split(':')[0].strip
+          guest_path = volume.split(':')[1].strip
+          nodeconfig.vm.synced_folder host_path, guest_path
+        end
+      end
+      
+
+        
+      nodeconfig.vm.provision "shell", inline: "timedatectl set-timezone Asia/Seoul"
+    #       config.vm.provision "shell", inline: <<-SHELL
+    #   cat <<EOF >> /etc/netplan/60-override.yaml
+    #   ---
+    #   network:
+    #     version: 2
+    #     renderer: networkd
+    #     ethernets:
+    #       eth0:
+    #         dhcp4: yes
+    #         dhcp4-overrides:
+    #           use-routes: false
+    #       eth1:
+    #         dhcp4: true
+    #    EOF
+    #    netplan apply
+    #    sleep 5
+    #  SHELL
+      #
+      # -------------------------------------------------------------------------------------------------------------
+      # Execute Shell Script on VM
+      if server.key?("init_command")
+        nodeconfig.vm.provision "shell", inline: <<-SCRIPT
+        echo "###########################################################"
+        echo "##    RUN SCRIPT FROM VAGRANT BOX                        ##"
+        echo "###########################################################"
+        sudo #{server["init_command"]}
+        echo "###########################################################"
+        echo "##    FINISH SCRIPT FROM VAGRANT BOX                     ##"
+        echo "###########################################################"
+        SCRIPT
+      end
+      
+    end
+  end
+  # ===============================================================================================================================
+  
+end
