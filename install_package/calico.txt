@@ -1,0 +1,9 @@
+#calico version 확인
+curl https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml -O --insecure
+
+#필요에 따라 CALICO_IPV4POOL_CIDR
+vim calico.yaml 
+
+kubectl apply -f calico.yaml
+
+sudo systemctl restart containerd
