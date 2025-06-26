@@ -26,7 +26,21 @@ network:
               addresses:
                 - 8.8.8.8
                 - 8.8.4.4
-
+or
+network:
+    ethernets:
+        enp0s3:
+            dhcp4: false
+            addresses:
+              - 10.100.0.100/24
+            routes:
+             - to: default
+               via: 10.100.0.1
+            nameservers:
+              addresses:
+               - 8.8.8.8
+               - 8.8.4.4
+    version: 2
 sudo netplan apply
 
 기타 package 설치
