@@ -1,0 +1,53 @@
+[사전 준비]
+root user
+sudo passwd root
+
+vm network 구성
+sudo vi /etc/hostsname
+k8s-master
+k8s-node1
+k8s-node2
+
+sudo vi /etc/hosts
+10.100.0.100	k8s-master
+10.100.0.101	k8s-node1
+10.100.0.102	k8s-node2
+
+sudo vi /etc/netplan/50-cloud-init.yaml
+network:
+    version: 2
+    ethernets:
+        enp0s3:
+            dhcp4: false
+            addresses:
+              - 10.100.0.100/24
+            gateway4: 10.100.0.1
+            nameservers:
+              addresses:
+                - 8.8.8.8
+                - 8.8.4.4
+
+sudo netplan apply
+
+기타 package 설치
+sudo apt-get update -y
+sudo apt-get install -y openssh-server vim curl tree
+sudo apt-get install net-tools
+
+##docker 설치(worker만)
+sudo apt-get update
+sudo apt-get install \
+ca-certificates \
+curl \
+gnupg \
+lsb-release
+    
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+ 
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+ $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin
