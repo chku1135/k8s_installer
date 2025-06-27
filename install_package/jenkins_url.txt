@@ -1,1 +1,195 @@
+https://github.com/sysnet4admin/_Lecture_k8s_learning.kit/tree/main/ch1
 https://jongcloud.inblog.io/%EC%BF%A0%EB%B2%84%EB%84%A4%ED%8B%B0%EC%8A%A4-%ED%99%98%EA%B2%BD%EC%97%90%EC%84%9C-jenkins-%EC%84%A4%EC%B9%98%ED%95%98%EA%B8%B0-18677
+
+k8s jenkins cluster 생성
+
+1. jenkins kubernetes 매니페스트 파일 생성
+git clone https://github.com/scriptcamp/kubernetes-jenkins
+ > git 없는 경우 > yum install git
+
+
+
+#jenkins deploy
+1. namespace 생성
+kubectl create namesapce jenkins
+
+
+2. serviceAccount.yaml
+==============================================
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jenkins-admin           # 클러스터 구성 요처 관리 모든권한
+rules:
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-admin           # 클러스터 구성 요처 관리 모든권한
+  namespace: jenkins            # 원하는데로 수정 후 생성
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jenkins-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: jenkins-admin           # 클러스터 구성 요처 관리 모든권한
+subjects:
+- kind: ServiceAccount
+  name: jenkins-admin           # 클러스터 구성 요처 관리 모든권한
+  namespace: jenkins
+==============================================
+  kubectl apply -f serviceAccount.yaml
+
+
+3. ‘volume.yaml’을 생성하고 다음 영구 볼륨(pv) 매니페스트를 복사
+==============================================
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jenkins-pv-volume
+  labels:
+    type: local
+spec:
+  storageClassName: local-storage
+  claimRef:
+    name: jenkins-pv-claim
+    namespace: jenkins
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  local:
+    path: /mnt
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k8s-node1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jenkins-pv-claim
+  namespace: jenkins
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 3Gi
+==============================================
+
+4. volume 생성
+kubectl create -f volume.ywml
+
+5. ‘deployment.yaml'
+==============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins-server
+  template:
+    metadata:
+      labels:
+        app: jenkins-server
+    spec:
+      securityContext:
+            fsGroup: 1000
+            runAsUser: 1000
+      serviceAccountName: jenkins-admin
+      containers:
+        - name: jenkins
+          image: jenkins/jenkins:lts
+          resources:
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+            requests:
+              memory: "500Mi"
+              cpu: "500m"
+          ports:
+            - name: httpport
+              containerPort: 8080
+            - name: jnlpport
+              containerPort: 50000
+          livenessProbe:
+            httpGet:
+              path: "/login"
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: "/login"
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: jenkins-data
+              mountPath: /var/jenkins_home
+      volumes:
+        - name: jenkins-data
+          persistentVolumeClaim:
+              claimName: jenkins-pv-claim
+==============================================
+kubectl get all -n jenkins
+
+6. 통신을 위한 service 설정
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-service
+  namespace: jenkins
+  annotations:
+      prometheus.io/scrape: 'true'
+      prometheus.io/path:   /
+      prometheus.io/port:   '8080'
+spec:
+  selector:
+    app: jenkins-server
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 32000
+==============================================
+
+
+7. web 접속확인
+http://<<node-ip>:32000
+ > unlock jenkins 확인
+
+
+[root@k8s-masterjw kubernetes-jenkins]# 
+kubectl exec pod/jenkins-bf6b8d5fb-bgrfk -it /bin/bash -n jenkins
+
+jenkins@jenkins-bf6b8d5fb-bgrfk:/$ cat /var/jenkins_home/secrets/initialAdminPassword
+<<PASSWORD값>>
