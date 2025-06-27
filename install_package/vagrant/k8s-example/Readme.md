@@ -16,5 +16,5 @@ https://www.virtualbox.org/wiki/Downloads
   -> Vagrantfile 생성
 
 4. Vagrantfile config에 맞는 vm 생성
- ## OS : https://portal.cloud.hashicorp.com/vagrant/discover
+ > OS : https://portal.cloud.hashicorp.com/vagrant/discover
  > vagrant up
