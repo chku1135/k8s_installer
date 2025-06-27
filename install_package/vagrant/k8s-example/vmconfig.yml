@@ -1,0 +1,30 @@
+vagrant:
+  version: 2
+
+servers:
+  - hostname: k8s
+    resources: 
+      - src: ./res-root/k8s
+        dest: script
+
+    init_command: chmod +x ./script/*.sh && ./script/setup.sh ./script
+
+    # VM UI를 띄울지 여부
+    gui: false
+
+    # VM에서 사용할 Base Image.
+    box: ubuntu/jammy64
+    network:
+      interface:
+        nat: "enp0s3"
+        bridge: "enp0s8"
+      mode: public_network
+      # 실제 사용하는 Network Interface의 ID
+      bridge: wlo1
+      # 설정할 고정 IP
+      ip: 192.168.0.156
+      # Gateway IP
+      gw: 192.168.0.1
+    # 리소스 설정
+    cpu: 2
+    ram: 4096
