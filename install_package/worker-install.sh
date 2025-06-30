@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#root user
+#############################################################
 #swapoff
 swapoff -a && sed -i '/swap/s/^/#/' /etc/fstab
 
@@ -22,6 +24,7 @@ echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
 #disable firewall
 systemctl stop firewalld 
 systemctl disable firewalld
+############################################################
 
 # k8s insatll
 sudo apt-get update
@@ -29,13 +32,27 @@ sudo apt-get install -y apt-transport-https ca-certificates curl
 
 mkdir /etc/apt/keyrings
 
-curl -fsSL https://dl.k8s.io/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+#docker install
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y docker.io
 
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+#docker 설치 확인
+sudo docker --version
+
+#curl -fsSL https://dl.k8s.io/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+
+#echo "deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list 
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
 
 #version 수정 가능
-sudo apt-get update
-sudo apt-get install kubelet=1.22.8-00 kubeadm=1.22.8-00 kubectl=1.22.8-00 
+#sudo apt-get update
+#sudo apt-get install kubelet=1.22.8-00 kubeadm=1.22.8-00 kubectl=1.22.8-00
+
+sudo apt update
+sudo apt install -y kubelet kubeadm kubectl
+
 sudo apt-mark hold kubelet kubeadm kubectl
 
 systemctl daemon-reload
@@ -50,8 +67,21 @@ sudo mkdir -p /etc/containerd
 sudo containerd config default | sudo tee /etc/containerd/config.toml
 
 # SystemdCgroup = true 로 수정 후 저장
-sudo vi /etc/containerd/config.toml
+#sudo vi /etc/containerd/config.toml
 sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml 
+
+mkdir -p $HOME/.kube
+#k8s-master config file $HOME/.kube/config 경로 upload
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+#export KUBECONFIG=/etc/kubernetes/admin.conf
+
+#mkdir -p $HOME/.kube
+#sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config  # 쿠버네티스 설정 복사
+#sudo chown $(id -u):$(id -g) $HOME/.kube/config   # 권한 부여
+echo 'export KUBECONFIG=$HOME/.kube/config' >> $HOME/.bashrc
+source ~/.bashrc
+
 
 # containerd 서비스 재시작
 sudo systemctl restart containerd.service
@@ -59,5 +89,8 @@ sudo systemctl enable containerd.service
 
 # 서비스 상태 확인
 #sudo systemctl status containerd.service
+#install calico
+#echo "kubeadm join..."
 
-echo "kubeadm join..."
+
+

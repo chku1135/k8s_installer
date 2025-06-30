@@ -9,9 +9,9 @@ k8s-node1
 k8s-node2
 
 sudo vi /etc/hosts
-10.100.0.100	k8s-master
-10.100.0.101	k8s-node1
-10.100.0.102	k8s-node2
+10.0.2.10 k8s-master
+10.0.2.11 k8s-node1
+10.0.2.12 k8s-node2
 
 sudo vi /etc/netplan/50-cloud-init.yaml
 network:
@@ -20,8 +20,8 @@ network:
         enp0s3:
             dhcp4: false
             addresses:
-              - 10.100.0.100/24
-            gateway4: 10.100.0.1
+              - 10.0.2.10/24
+            gateway4: 10.0.2.1
             nameservers:
               addresses:
                 - 8.8.8.8
