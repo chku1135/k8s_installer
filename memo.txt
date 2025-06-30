@@ -20,6 +20,7 @@ or
 https://github.com/sysnet4admin/_Lecture_k8s_starter.kit/tree/main
 
 
+<<<<<<< HEAD
 wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
 sudo apt update && sudo apt install vagrant
@@ -31,3 +32,44 @@ $ cd vagrant-k8s
    $ BUILD_MODE=BRIDGE vagrant up  # for a BRIDGED network (same network as the host)
    $ BUILD_MODE=NAT vagrant up # for NAT network (isolated from the host)
 $ vagrant reload
+=======
+k8s 정리
+
+Deployment
+ - ReplicaSet : pod replica 항상 유지 되도록 보장
+ - 업데이트(배포) 방식 : 
+        블루/그린 : pod 한번에/동시에 진행
+        롤링 : 하니씩 순차 진행
+        카나리 : version 별로 (ex 일부 신버전, 일부는 구버전)
+
+StatefulSet
+ pod 관리를 위한 controller > pod 고유성, 순서 보장
+ - Database : master node 기동 후 worker node 순차적 기동 때 사용
+ - 개별 pod PV 생성하여 연결 > pod 비정상 종료 후 new pod가 기존 pod에 연결된 pv를 담당
+
+DemonSet
+cluster 운영 시 기본적인 노드-로컬 기능 제공
+
+Job&CronJob
+ Job : 실행 완료 후 중단
+ CronJob : 반복 일정에 따라 job 생성
+ 작업유형 :
+    Non-Parllel jobs
+    Parallel jobs with a Fixed complete count
+    Parallel jobs with a work queue
+
+Service
+ pod는 언제든지 생성/삭제 가능한 비영구적 리소스 > pod 접근 시 service라는 오브젝트 이용
+ 서비스 종류
+    ClusterIP : k8s 내부에서만 접근
+    NodePort : 외부에서도 접근 가능. 모든 node에 동일한 port 개방
+    LoadBalancer : 클라우드 서비스의 로드벨런서 사용
+
+ConfigMap
+
+
+##metalLB(LoadBalancer)
+
+##각종 guide 자료
+https://www.oss.kr/solution_guide
+>>>>>>> 13d361f972f75ba61c70b121f67139b904154bea
