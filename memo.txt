@@ -56,3 +56,6 @@ ConfigMap
 
 
 ##metalLB(LoadBalancer)
+
+##각종 guide 자료
+https://www.oss.kr/solution_guide
