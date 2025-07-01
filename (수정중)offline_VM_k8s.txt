@@ -1,0 +1,185 @@
+
+참고 사이트
+https://learningit.tistory.com/19
+
+os : 2204 ubuntu
+
+docker/container package
+- docker-ce
+- docker-ce-cli
+- containerd.io
+
+
+## online server
+#오프라인 docker 설치를 위한 패키지 다운
+#root user
+cd /var/cache/apt/archives
+
+#도커 공식 GPG 키 추가
+curl -fsSl https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+#Stable 리포지토리 설정
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+#업데이트
+apt-get update
+
+#download-only 필요 package download
+apt-get install --download-only docker-ce docker-ce-cli containerd.io
+
+#package cvf 
+tar cvf u2204_docker.tar *.deb
+
+
+###on/offline server docker install
+##/home directory
+mkdir docker
+mv u2204_docker.tar docker
+cd docker
+taqr xvf u2204_docker.tar
+
+dpkg -R --install docker
+
+agt-get -f install
+
+## version check
+docker version
+
+
+## offline server
+## server 기본 설정
+#root user
+swapoff -a && sudo sed -i '/swap/s/^/#/' /etc/fstab
+cat <<EOF | sudo tee /etc/modules-Load.d/k8s.conf
+br_netfilter
+EOF
+
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+
+sudo sysctl --system
+
+ufw disable
+
+###우분투 리포지토리 설정??
+======================================================================
+#iso 마운트용 디렉토리 생성  >> https://lkimas.tistory.com/entry/Ubuntu-Ubuntu-Local-APT-Repository
+mkdir -p /mnt/iso
+## ubuntu iso file > /mnt/iso 경로 업로드
+
+#iso 파일 mount
+sudo mount -o loop /mnt/iso/[ubuntu_iso_+file명] /mnt/iso
+
+#mount 확인
+cd /mnt/iso >> iso 파일 내부 directory 확인
+
+#APT repository 추가
+vi /etc/apt/source.list
+======================================
+deb file:///mnt/iso jammy main restricted
+======================================
+
+#패키지 업데이트
+apt-get update
+
+#재부팅 자동 mount
+vi /etc/fstab
+/mnt/iso/[ubuntu_iso_+file명] /mnt/iso iso9660 loop 0 0
+======================================================================
+or
+======================================================================
+$ sudo touch /etc/apt/sources.list
+$ sudo add-apt-repository "deb file:/mnt/ubuntu/ $(lsb_release -cs) main"
+$ sudo apt update
+======================================================================
+
+vi /etc/apt/sources.list
+
+deb http://10.118.99.68/ubuntu jammy main restricted
+ >> 어디 ip??? offline 서버 ip 인가???
+
+apt-get install -y apt-transport-https ca-certificates curl
+
+
+## online server
+#리포지토리 업데이트 후 최신버전 업데이트
+curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main
+
+curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://dl.k8s.io/apt/doc/apt-key.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main
+
+apt-get update
+
+cd /var/cache/apt/archives
+apt-get install --download-only kubelet kubeadm kubectl
+
+tar cvf u-k8s-[version].tar *.deb
+
+## package offline server /home directory로 전송
+
+
+## offline server 
+# home directory
+mkdir kubernetes
+mv [kubernetes].tar kubernetes
+cd kubernetes
+tar xvf [kubernetes].tar
+dpkg -i *.deb
+
+apt-mark hold kubelet kubeadm kubectl
+
+#docker, containerd 설정 수정
+mkdir /etc/docker
+cat <<EOF | sudo tee /etc/docker/daemon.json
+{
+    "exec-opts": ["native.cgroupdriver=systemd"],
+    "log-dirver": "json-file",
+    "log-opts": {
+        "max-size": "100m"
+    },
+    "storage-driver": "overlay2"
+}
+EOF
+
+systemctl demon-reload
+systemctl restart kubelet
+
+rm /etc/containerd/config.toml
+systemctl restart containerd
+
+
+
+#online server
+#오프라인 필요 컨테이너 이미지 목록 확인
+kubeadm config images list
+
+#필요 container image 다운
+cd /apt-mirror/k8s-container-image
+docker pull registry.k8s.io/kube-apiserver:v1.28.2
+docker pull registry.k8s.io/kube-controller-manager:v1.28.2
+docker pull registry.k8s.io/kube-scheduler:v1.28.2
+docker pull registry.k8s.io/kube-proxy:v1.28.2
+docker pull registry.k8s.io/pause:3.9
+docker pull registry.k8s.io/etcd:3.5.9-0
+docker pull registry.k8s.io/coredns/coredns:v1.10.1
+
+#다운 받은 image tar
+docker save registry.k8s.io/kube-apiserver > kube-apiserver-v1.28.2.tar
+...
+
+#tar cvf
+tar cvf k8s-container-image.tar k8s-container-image/
+
+## 폐쇄망으로 file 전송
+
