@@ -73,3 +73,33 @@ ConfigMap
 ##각종 guide 자료
 https://www.oss.kr/solution_guide
 >>>>>>> 13d361f972f75ba61c70b121f67139b904154bea
+
+
+k8s pv 설정
+참고 사이트
+https://forcloud.tistory.com/202
+https://velog.io/@johnsuhr4542/K8s-%ED%99%98%EA%B2%BD%EC%97%90%EC%84%9C-NFS-%EB%85%B8%EB%93%9C-%EB%B3%BC%EB%A5%A8-%EA%B5%AC%EC%84%B1
+
+
+git/jenkins 연동
+참고 사이트
+https://velog.io/@rungoat/CICD-Jenkins%EC%99%80-GitHub-%EC%97%B0%EB%8F%99%ED%95%98%EA%B8%B0
+
+k8s jenkins
+참고 사이트
+https://kindloveit.tistory.com/125
+
+
+#jenkins yaml download
+git clone https://github.com/scriptcamp/kubernetes-jenkins
+
+#namespace 생성
+#jenkins yaml default namespace > 'devops-tools'
+kubectl create namesapce devops-tools
+
+#serviceAccount.yaml 실행
+#생성 계정명 확인 > name: jenkins-admin
+kubectl create -f serviceAccount.yaml
+or 
+kubectl apply -f serviceAccount.yaml
+
