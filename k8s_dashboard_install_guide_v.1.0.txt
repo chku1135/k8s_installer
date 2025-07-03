@@ -158,3 +158,7 @@ kubectl edit deploy kubernetes-dashboard -n kubernetes-dashboard
         - --namespace=kubernetes-dashboard
 =============================================
 
+##k8s-dashboard 토큰
+kubectl -n kubernetes-dashboard edit deployments kubernetes-dashboard
+ --token-ttl=0              #영구 토큰 생성 > 토큰 재생성 후 접속
+ --enable-skip-login        #토큰 인증을 비활성화
