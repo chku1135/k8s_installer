@@ -139,3 +139,7 @@ kubectl top pod -n auw-ai
 Kubernetes 클러스터에 설치된 Custom Resource Definitions (CRDs)가 있다면, Dashboard에서 이를 모니터링하도록 설정할 수 있습니다. CRD를 설치한 후, Dashboard에서 이를 조회하고 관리할 수 있도록 추가 구성을 해야 합니다.
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.6.1/aio/deploy/crd.yaml
 
+##k8s-dashboard 토큰
+kubectl -n kubernetes-dashboard edit deployments kubernetes-dashboard
+ --token-ttl=0              #영구 토큰 생성 > 토큰 재생성 후 접속
+ --enable-skip-login        #토큰 인증을 비활성화
