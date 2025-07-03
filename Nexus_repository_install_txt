@@ -1,0 +1,66 @@
+#Nexus repository install guide
+#참고사이트: https://potato-yong.tistory.com/144
+
+#사전 작업
+#java install(1.8이상)
+sudo yum install -y java-1.8.0
+
+#Nexus3 latest version download
+wget https://download.sonatype.com/nexus/3/latest-unix.tar.gz 
+>>download 경로 : https://help.sonatype.com/en/download.html
+
+#tar 압축 해제
+tar -zxvf latest-unix.tar.gz
+
+#nexus 디랙토리 이동
+mv nexus-3.34.0-01 /opt/nexus
+mv sonatype-work /opt
+
+##선택 > nexus 사용자 생성
+sudo useradd nexus
+
+#nexus user 경우 nexus 접근 시 패스워드 X
+visudo 
+=============하기 내용 추가==============
+root    ALL=(ALL)       ALL
+nexus   ALL=(ALL)       NOPASSWD:ALL
+=======================================
+
+#디랙토리 권한 변경
+sudo chown -R nexus:nexus /opt/nexus
+sudo chown -R nexus:nexus /opt/sonatype-work
+
+#nexus 사용자 등록/수정
+vi /opt/nexus/bin/nexus.rc
+ > run_as_user="nexus"
+
+#nexus 자동 실행
+sudo ln -s /opt/nexus/biin/nexus /etc/init.d/nexus
+
+#nexus 기타 설정
+vi /opt/nexus/etc/nexus-default.properties
+==================================================================
+## DO NOT EDIT - CUSTOMIZATIONS BELONG IN $data-dir/etc/nexus.properties
+##
+# Jetty section
+application-port=8081       #port정보 > 변경가능
+application-host=0.0.0.0    #serverIP:port 접근가능
+nexus-args=${jetty.etc}/jetty.xml,${jetty.etc}/jetty-http.xml,${jetty.etc}/jetty-requestlog.xml
+nexus-context-path=/
+
+# Nexus section
+nexus-edition=nexus-pro-edition
+nexus-features=\
+ nexus-pro-feature
+
+nexus.hazelcast.discovery.isEnabled=true
+==================================================================
+
+#nexus 실행
+/etc/lnit.d/nexus start
+
+#ID/PW 확인
+ID : admin
+#password 확인
+cat /opt/sonatype-work/nexus3/admin.password
+> password 확인 후 web에서 로그인 진행
