@@ -103,6 +103,12 @@ kubectl apply -f dashboard-admin.yaml
 #만들어진 대시보드 토큰 값 생성
 kubectl -n kubernetes-dashboard create token admin-user
 
+ex)
+manager@k8s-node1:~$ 
+kubectl -n kubernetes-dashboard create token admin-user
+eyJhbGciOiJSUzI1NiIsImtpZCI6IldvVTA5anJ2WGNxUDNLRXRPMVRVTzhuNVd0bnVEa0h5N2paaVhXYWFwQmsifQ.eyJhdWQiOlsiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiXSwiZXhwIjoxNzUxMzgzNDk4LCJpYXQiOjE3NTEzNzk4OTgsImlzcyI6Imh0dHBzOi8va3ViZXJuZXRlcy5kZWZhdWx0LnN2Yy5jbHVzdGVyLmxvY2FsIiwianRpIjoiYjQzZGFkMzYtNDYwOC00NGMyLTg5MjYtMDU0OGExNWMxNTYzIiwia3ViZXJuZXRlcy5pbyI6eyJuYW1lc3BhY2UiOiJrdWJlcm5ldGVzLWRhc2hib2FyZCIsInNlcnZpY2VhY2NvdW50Ijp7Im5hbWUiOiJhZG1pbi11c2VyIiwidWlkIjoiMWM2OTFkMDktNTkzZi00ZmZmLWE2ODgtZDFjZDg0ZThlZjFiIn19LCJuYmYiOjE3NTEzNzk4OTgsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDprdWJlcm5ldGVzLWRhc2hib2FyZDphZG1pbi11c2VyIn0.dSltPK8US4aG28uyzwzNY9C7o9eeDF43ZiP16cqdAgWzFDMsAS_Yn46F__WyL0HkMtYIYclT7M2OiqN90lg8TeeNoh6ciVr7n0JWlULyTWm9qVzNvS3LIFFUYZUn5AjMv7B0alqiCeZ84RuNlvmd8O8BerLQL7O7LfhtfsSdasaOAvCckI83Qb3zABEJd58zFi-SScI5JpIccPqkduKw1WrGJExySk7JQpq2iNUfPf2dId88eSfck8vmC9g_Ce6yZ412kzZ5IiDWQinURnsS3ToNOYBEvR1Q0W7w6pZzdNAoqTxDrf53ZNe3g4BIAO0c7TJk0DC3337pNtRWB73YwQ
+
+
 ##쿠버네티스 대시보드 삭제 방법
 kubectl delete namespace kubernetes-dashboard
 
@@ -138,4 +144,17 @@ kubectl top pod -n auw-ai
 ##Custom Resource Definitions (CRDs) 활성화
 Kubernetes 클러스터에 설치된 Custom Resource Definitions (CRDs)가 있다면, Dashboard에서 이를 모니터링하도록 설정할 수 있습니다. CRD를 설치한 후, Dashboard에서 이를 조회하고 관리할 수 있도록 추가 구성을 해야 합니다.
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.6.1/aio/deploy/crd.yaml
+
+
+#kubernetes-dashboard token/login 생략
+kubectl edit deploy kubernetes-dashboard -n kubernetes-dashboard
+
+#하기항목 추가
+=============================================
+      - args:
+        - --enable-skip-login
+        - --disable-settings-authorizer
+        - --auto-generate-certificates
+        - --namespace=kubernetes-dashboard
+=============================================
 

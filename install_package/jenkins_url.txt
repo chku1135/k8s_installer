@@ -5,13 +5,13 @@ k8s jenkins cluster 생성
 
 1. jenkins kubernetes 매니페스트 파일 생성
 git clone https://github.com/scriptcamp/kubernetes-jenkins
- > git 없는 경우 > yum install git
+ > git 없는 경우 > sudo apt install git
 
 
 
 #jenkins deploy
 1. namespace 생성
-kubectl create namesapce jenkins
+kubectl create namespace jenkins
 
 
 2. serviceAccount.yaml
@@ -67,7 +67,7 @@ spec:
   storageClassName: local-storage
   claimRef:
     name: jenkins-pv-claim
-    namespace: jenkins
+    namespace: jenkins     # 생성한 namespace명 수정
   capacity:
     storage: 10Gi
   accessModes:
@@ -81,13 +81,13 @@ spec:
         - key: kubernetes.io/hostname
           operator: In
           values:
-          - k8s-node1
+          - k8s-node1       ## nodeName 지정
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: jenkins-pv-claim
-  namespace: jenkins
+  namespace: jenkins      # 생성한 namespace명 수정
 spec:
   storageClassName: local-storage
   accessModes:
@@ -160,14 +160,18 @@ spec:
           persistentVolumeClaim:
               claimName: jenkins-pv-claim
 ==============================================
+
+kubectl create -f deployment.yaml
+
 kubectl get all -n jenkins
 
 6. 통신을 위한 service 설정
+vi service.yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: jenkins-service
-  namespace: jenkins
+  namespace: jenkins    ## namesapce명
   annotations:
       prometheus.io/scrape: 'true'
       prometheus.io/path:   /

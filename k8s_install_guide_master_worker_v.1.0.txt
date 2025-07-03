@@ -76,3 +76,11 @@ kubectl get svc
 
 웹브라우저 확인
 http://[cluster-ip]:32215 접속 >> nginx page 확인
+
+ex)
+manager@k8s-node2:~$ kubectl get svc
+NAME         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+kubernetes   ClusterIP   10.96.0.1        <none>        443/TCP        28h
+web-svc      NodePort    10.102.147.127   <none>        80:31890/TCP   6m45s
+
+http://10.0.2.10:31890 
