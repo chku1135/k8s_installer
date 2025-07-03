@@ -81,7 +81,9 @@ spec:
         - key: kubernetes.io/hostname
           operator: In
           values:
-          - k8s-node1       ## nodeName 지정
+          - k8s-master      ## nodeName 지정
+          - k8s-node1       ## cluster hostname 모두 지정 (error : "volume node affinity conflict")
+          - k8s-node2
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -231,13 +233,17 @@ kubectl get pods -n jenkins
  > pod명 확인
 
 kubectl logs ${파드명} --namespace=jenkins
- > password 확인
+ > password 확인  (ex kubectl logs jenkins-68c8b7f55-drszw --namespace=jenkins)
 or
 kubectl exec -it ${파드명} cat /var/jenkins_home/secrets/initialAdminPassword -n jenkins
 
-# jenkins pipeline 테스트
+[Result]
+==============================================================================================
+Jenkins initial setup is required. An admin user has been created and a password generated.
+Please use the following password to proceed to installation:
 
-
+73a8cf935a69441798ca974354631511
+==============================================================================================
 
 7. web 접속확인
 http://<<node-ip>:32000
@@ -249,3 +255,5 @@ kubectl exec pod/jenkins-bf6b8d5fb-bgrfk -it /bin/bash -n jenkins
 
 jenkins@jenkins-bf6b8d5fb-bgrfk:/$ cat /var/jenkins_home/secrets/initialAdminPassword
 <<PASSWORD값>>
+
+# jenkins pipeline 테스트
