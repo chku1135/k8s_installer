@@ -1,0 +1,55 @@
+#참고사이트: 
+https://velog.io/@gclee/Ubuntu%EC%97%90%EC%84%9C-Harbor-%EC%84%A4%EC%B9%98-%EB%B0%8F-%EC%82%AC%EC%9A%A9
+
+#참고사이트(registry-mirror 구성)
+https://blog.encicle.com/ubuntu-2204-harborleul-iyonghan-registry-mirrors-guseong-02
+
+#Harbor 설치
+#설치 파일(.tar) download 경로
+https://github.com/goharbor/harbor/releases
+or
+wget https://github.com/goharbor/harbor/releases/download/v2.13.1/harbor-offline-installer-v2.13.1.tgz
+
+
+tar xvf harbor-offline-installer-v2.13.1.tgz
+
+#harbor.yml 생성
+cd ~/${harbor_directory}
+cp harbor.yml.tmpl harbor.yml
+
+#harbor.yaml 수정
+ > hostname, port, data_volume 경로 수정
+==============================================================
+hostname: 192.168.0.10
+
+# http related config
+http:
+  # port for http, default is 80. If https enabled, this port will redirect to https port
+  port: 80
+
+# https related config
+# https:
+  # https port for harbor, default is 443
+  # port: 443
+  # The path of cert and key files for nginx
+  # certificate: /your/certificate/path
+  # private_key: /your/private/key/path
+  # enable strong ssl ciphers (default: false)
+  # strong_ssl_ciphers: false
+  
+  
+...
+
+# The default data volume
+data_volume: /home/ubuntu/harbor/harbor_data
+
+...
+==============================================================
+
+#data directory 생성
+mkdir -p /home/ubuntu/harbor/harbor_data
+
+#harbor install
+sudo ./install.sh
+
+#http://${hostname}:#{port} web 접근
