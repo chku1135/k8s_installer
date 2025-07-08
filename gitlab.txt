@@ -1,0 +1,58 @@
+gitlab
+#k8s cluster 외 별도 ubuntu server 구축 후 설치
+
+#gitlab package 
+sudo apt install ca-certificates curl openssh-server
+
+#repository
+curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
+
+#gitlab install
+sudo apt update
+sudo apt install gitlab-ce
+
+##gitlab config file > /etc/gitlab/gitlab.rb
+#url 설정
+sudo vi /etc/gitlab/gitlab.rb
+============================
+extrernal_url '${변경할 ip}'
+============================
+
+#설정 적용
+sudo gitlab-ctl reconfigure
+
+#최초 로그인
+sudo cat /etc/gitlab/initial_root_password
+ > 패스워드 확인
+ 
+##패스워드 초기화
+sudo gitlab-rake "gitlab:password:reset"
+ > username, password 재설정
+
+#gitlab web 접속
+ > id/pw 로그인 확인
+
+#gitlab 저장소 변경
+#root 계정 변경
+cd /var/opt/gitlab/git-data	<< 기본 repositories 경로
+
+sudo vi /etc/gitlab/gitlab.rb
+========================
+#해당부분 주석 제거 후 수정
+git-data-dirs({
+  "default" => {
+    "path" => "${변경할 경로}"
+  }
+})
+========================
+
+#디랙토리 생성 및 권한 설정
+sudo mkidr -p ${변경할 경로}
+sudo chown -R manager:manager ${변경할 경로}
+
+#설정 반영
+sudo gitlab-ctl reconfigure
+
+#변경한 repository경로에 "repositories"확인
+cd ${변경한 경로}
+
