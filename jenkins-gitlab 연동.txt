@@ -1,0 +1,44 @@
+#참고 사이트 : https://ojm1484.tistory.com/58
+
+jenkins-gitlab 연동
+
+##Jenkins
+#gitlab credentials 등록
+1. Jenkins 관리 > ManageCredentials > Add credentials
+
+ - kind : Username with password
+ - Scope : Global (Jenkins, nodes, items, all child items, etc)
+ - Username : GitLab 사용중인 아이디 (중요)⭐️
+ - Password : GitLab 에서 발급받은 토큰 값
+ - ID : 아무거나 이름짓기
+  >> create 하면 credential 생성 완료
+
+#jenkins job 생성(webhook)
+1. jenkins 메인 page > 새로운 item or create job
+
+2. 생성할 프로젝트 이름 입력 > freestyle project
+
+3. 소스코드 관리 > git 선택
+ - Repository URL - GitLab에서 Http 클론 주소
+ - Credentials - 좀 전에 등록한 credential
+
+4. jenkins 빌드
+(사이트 참조)
+빌드유발 > GitLab 선택 후 뒤에 붙어있는 URL을 잘 메모해두자,
+
+5. Secret token > generate 
+  > 생성된 토큰은 저장
+  >> 이후 gitlab에서 진행
+
+
+##gitlab에서 진행
+#gitlab webhook 등록
+1. settings > webhooks
+ - URL - 아까 메모해뒀던 URL
+ - Secret token - 발급받은 secret token
+ - Trigger >> 원하는 항목 체크
+
+## trigger > push event > 테스트 '200' 확인 -정상
+
+
+
