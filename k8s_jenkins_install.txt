@@ -256,4 +256,9 @@ kubectl exec pod/jenkins-bf6b8d5fb-bgrfk -it /bin/bash -n jenkins
 jenkins@jenkins-bf6b8d5fb-bgrfk:/$ cat /var/jenkins_home/secrets/initialAdminPassword
 <<PASSWORD값>>
 
+
+
+
+
+
 # jenkins pipeline 테스트
