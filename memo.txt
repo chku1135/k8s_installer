@@ -103,3 +103,29 @@ kubectl create -f serviceAccount.yaml
 or 
 kubectl apply -f serviceAccount.yaml
 
+
+
+
+
+
+https://uxgjs.tistory.com/191
+
+#gitlab 중지
+sudo gitlab-ctl stop
+
+#gitlab.rb 수정
+ git_data_dirs({ #   "default" => { "path" => "/var/opt/gitlab/git-data" }, # })
+
+#수정 반영
+sudo gitlab-ctl reconfigure
+
+#gitlab 재실행
+sudo gitlab-ctl start
+
+
+#git-maven build
+https://blog.hojaelee.com/247
+
+#nexus-spring(maven) repository 연동
+https://nextshds.tistory.com/63
+
