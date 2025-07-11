@@ -129,3 +129,16 @@ https://blog.hojaelee.com/247
 #nexus-spring(maven) repository 연동
 https://nextshds.tistory.com/63
 
+
+##원격 서버 harbor 설치
+#참고 사이트 : https://kschoi728.tistory.com/66
+
+##k8s containerd <-> harbor 연동
+#참고 사이트 : https://lordofkangs.tistory.com/707
+
+##helm install
+#https://nayoungs.tistory.com/entry/Kubernetes-Helm%EC%9D%B4%EB%9E%80-Helm%EC%9D%98-%EA%B0%9C%EC%9A%94%EC%99%80-%EC%82%AC%EC%9A%A9%EB%B2%95
+
+##Jenkins CI/CD 구축 (With Docker + Github + Docker Hub)
+#참고 사이트 : https://j-d-i.tistory.com/377
+
