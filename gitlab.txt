@@ -66,6 +66,37 @@ cd ${변경한 경로}
 #####별 지랄을 다 했는데 경로가 안바뀜....ㅅㅂ
 
 
+<<<<<<< HEAD
 sudo vi /etc/gitlab/gitlab.rb
 gitlab_rails['gitlab_shell_repos_storage_path'] = "/mnt/gitlab/git-data/repositories"
 sudo gitlab-ctl reconfigure
+=======
+############################################################
+##저장소 변경
+하지만, 만일 이미 저장소를 사용하고 있다면 다음과 같이 해줘야 한다.
+
+Gitlab 에 데이터 저장 디렉토리 변경
+mkdir /opt/gitlab-data
+chown git:root /opt/gitlab-data
+ 
+# Prevent users from writing to the repositories while you move them.
+gitlab-ctl stop
+ 
+# Note there is _no_ slash behind 'repositories', but there _is_ a
+# slash behind 'git-data'.
+sudo rsync -av /var/opt/gitlab/git-data/repositories /opt/gitlab-data
+ 
+# Start the necessary processes and run reconfigure to fix permissions
+# if necessary
+sudo gitlab-ctl upgrade
+ 
+# Double-check directory layout in /opt/gitlab-data. Expected output:
+# repositories
+sudo ls /opt/gitlab-data/
+ 
+# Done! Start GitLab and verify that you can browse through the repositories in
+# the web interface.
+sudo gitlab-ctl start
+
+
+>>>>>>> 8dab4251fca6865a997382e795ae749e794a86fe

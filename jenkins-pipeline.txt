@@ -1,0 +1,41 @@
+##jenkins pipeline test
+#참고 사이트 : https://infinitecode.tistory.com/117
+
+1. project 생성
+ - NewItem > 프로젝트 명 입력, pipeline 선택 > ok
+
+2. 프로젝트 설정
+ - Build Triggers > Poll SCM
+ - Pipeline >  Definition
+   - Pipeline script from SCM
+   - SCM > Git 선택 > git repository URL 입력, git 토큰 등록
+   - Script Path에 Jenkinsfile 입력
+   - Lightweigth checkout 체크해제
+
+## test 1
+GitHub hook trigger for GITScm polling
+ > Definition > pipeline script 입력
+ > 완료 후 bulid now 
+
+##trigger test pipeline 
+######################################################
+pipeline {
+    agent any  // 파이프라인이 실행될 에이전트 지정
+    stages {
+        stage('Check main Branch') {
+            steps {
+                echo 'echo : trigger success'
+                git branch: 'main',
+                    credentialsId: 'Github-Auth',           ## credential 생성(git login)
+                    url: 'https://github.com/Be-HinD/InfraStructure_Sample.git'     ##  git url
+            }
+        }
+    }
+}
+######################################################
+
+
+##springboot project(gradle)
+##참고 사이트 : https://infinitecode.tistory.com/118
+#jenkins tools
+ - dashboard > jenkins 관리 > tools
