@@ -66,11 +66,14 @@ cd ${변경한 경로}
 #####별 지랄을 다 했는데 경로가 안바뀜....ㅅㅂ
 
 
-<<<<<<< HEAD
+###latest gitlab version 저장소 변경 방법
 sudo vi /etc/gitlab/gitlab.rb
 gitlab_rails['gitlab_shell_repos_storage_path'] = "/mnt/gitlab/git-data/repositories"
 sudo gitlab-ctl reconfigure
-=======
+
+
+
+
 ############################################################
 ##저장소 변경
 하지만, 만일 이미 저장소를 사용하고 있다면 다음과 같이 해줘야 한다.
@@ -99,4 +102,3 @@ sudo ls /opt/gitlab-data/
 sudo gitlab-ctl start
 
 
->>>>>>> 8dab4251fca6865a997382e795ae749e794a86fe
