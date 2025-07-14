@@ -41,9 +41,17 @@ sudo vi /etc/gitlab/gitlab.rb
 #해당부분 주석 제거 후 수정
 git-data-dirs({
   "default" => {
-    "path" => "${변경할 경로}"
+    "path" => "${변경할 경로}"  #/home/manager/git_repo
   }
 })
+
+ex
+git_data_dirs({
+  "default" => {
+    "path" => "/data/git-data"
+   }
+})
+
 ========================
 
 #디랙토리 생성 및 권한 설정
@@ -55,4 +63,9 @@ sudo gitlab-ctl reconfigure
 
 #변경한 repository경로에 "repositories"확인
 cd ${변경한 경로}
+#####별 지랄을 다 했는데 경로가 안바뀜....ㅅㅂ
 
+
+sudo vi /etc/gitlab/gitlab.rb
+gitlab_rails['gitlab_shell_repos_storage_path'] = "/mnt/gitlab/git-data/repositories"
+sudo gitlab-ctl reconfigure

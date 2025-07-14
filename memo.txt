@@ -20,7 +20,6 @@ or
 https://github.com/sysnet4admin/_Lecture_k8s_starter.kit/tree/main
 
 
-<<<<<<< HEAD
 wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
 sudo apt update && sudo apt install vagrant
@@ -32,7 +31,6 @@ $ cd vagrant-k8s
    $ BUILD_MODE=BRIDGE vagrant up  # for a BRIDGED network (same network as the host)
    $ BUILD_MODE=NAT vagrant up # for NAT network (isolated from the host)
 $ vagrant reload
-=======
 k8s 정리
 
 Deployment
@@ -72,7 +70,6 @@ ConfigMap
 
 ##각종 guide 자료
 https://www.oss.kr/solution_guide
->>>>>>> 13d361f972f75ba61c70b121f67139b904154bea
 
 
 k8s pv 설정
