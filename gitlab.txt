@@ -71,7 +71,14 @@ sudo vi /etc/gitlab/gitlab.rb
 gitlab_rails['gitlab_shell_repos_storage_path'] = "/mnt/gitlab/git-data/repositories"
 sudo gitlab-ctl reconfigure
 
+##gitlab ssh 등록
+#참고 사이트 : https://zoetechlog.tistory.com/161
 
+#ssh 키 생성
+ssh-keygen
+- .ssh>id_ras.pub > 키값 복사
+
+#gitlab > SSH key 등록
 
 
 ############################################################
