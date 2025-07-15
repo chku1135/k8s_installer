@@ -41,4 +41,231 @@ jenkins-gitlab 연동
 ## trigger > push event > 테스트 '200' 확인 -정상
 
 
+###############################################################################################
+##jenkins-github 연동
+#참고 사이트 : https://enginnersnack.tistory.com/11
+#참고 사이트 : https://velog.io/@passion_hd/Jenkins-1
+
+
+====================[git]====================
+#gitlab project 생성
+ > create blank project > create project
+ =============================================
+
+##jenkins ssh key 등록
+#참고 사이트 : https://www.jacobbaek.com/999
+window : 
+[Git CMD]
+ssh-keygen -t rsa -b 4096 -C 'test@naver.com' -f D:/id_rsa
+cat ~/.ssh/id_rsa.pub > ssh key 복사
+
+gitlab > user settings > ssh keys > key 입력 > add key
+
+
+#jenkins repository 확인
+deployment.yaml 확인
+...
+          volumeMounts:
+            - name: jenkins-data
+              mountPath: /var/jenkins_home
+
+
+#jenkins plugin install
+Jenkins 관리 > 플러그인 관리로 이동하여 플러그인 설치를 진행합니다.
+
+jenkins lts 설치시 설치되어 있음(자동설치) : git plugin, Gradle Plugin
+
+설치 필요 : GitLab, Generic Webhook Trigger, Post build task, Docker, Docker Commons, Docker Pipeline, Docker API, SSH Agent
+
+*만약 설치할 플러그인이 보이지 않는다면 "설치 가능" 항목으로 이동하여 설치를 진행합니다.
+
+## 플러그인 설치 후 재시작 필요한 경우
+#https://dodo-devops.tistory.com/32
+
+#jdk 설정
+jenkins 관리 > Global tool Configuration
+ - jdk / gradle / docker 설정
+ > 사이트 참조
+
+#gradle 설정 *gradel version 미리 확인
+
+#Docker 경로 *경로 확인
+
+#jenkins > pipeline 생성 
+
+#build triggers > gitlab 설정 **webhook URL 따로 기록
+(checked)
+ - puth event
+ - opened merge request event
+ - approved merge requests(EE-only)
+ - comments
+ ...
+
+secret token > generate > 생성된 token 복사
+
+#gitlab > project > webhook > add webhook
+ - trigger > push events > "branch명"
+ - URL, secret token 입력
+
+
+==============[jenkins-pipeline]================
+Difinition: pipeline script from SCM
+SCM: git
+Repository URL: git url
+
+#credentails > add
+kind: SSH Username with private key
+ID: GitLab_SSH_Key(임의지정)
+Username: test@naver.com(임의지정)
+Private Key > Enter directly > 로컬pc의 ssh key 입력(cat ~/.ssh/id_rsa)
+
+##error 발생 시 master node > jenkins container 접근 > 인증 진행
+(master)
+- kubectl get all -n jenkins
+- kubectl exec -it -n jenkins pod/jenkins-deploymnet-56fb4b665-nrb9r /bin/bash
+(jenkins-container)
+git ls-remote -h -- git@git.kbotest.shop:kbo/spring.git HEAD
+ > yes > ctrl+C
+ ## jenkins pipeline에서 repository URL 다시 입력 시 error 해소
+
+저장
+================================================
+
+====================[boot]======================
+spring boot web project 생성
+src > main > static > index.html
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+<h1>my name is world</h1>
+</body>
+</html>
+
+#Deckerfile(최상위 경로) 생성
+FROM adoptopenjdk/openjdk8
+#ARG HOST_JAR_FILE_PATH=./springtest-0.0.1-SNAPSHOT.jar # Jar 경로 환경변수 설정.
+COPY ROOT.jar /ROOT.jar
+# 해당 Docker image로 Container를 생성/실행하는 시점에 아래의 커맨드가 수행되도록한다.
+CMD ["java",  "-jar", "/ROOT.jar"]
+
+#Jenkinsfile(최상위 경로) 생성
+pipeline {
+    agent any
+    tools {
+      gradle 'gradle_7.5.1'
+    }
+ environment {
+      dockerHubRegistry = 'dogsnack/spring' /* URL변경에 따른 수정 필요 */
+      /* dockerHubRegistryCredential = '{Credential ID}'*/
+  }
+  stages {
+
+    stage('Checkout Application Git Branch') {
+        steps {
+            git credentialsId: 'credential_kbo',
+                url: 'http://git.kbotest.shop/kbo/spring.git', /* URL변경에 따른 수정 필요 */
+                branch: 'main'
+        }
+        post {
+                failure {
+                  echo 'Repository clone failure !'
+                }
+                success {
+                  echo 'Repository clone success !'
+                }
+        }
+    }
+
+
+    stage('gardle Jar Build') {
+            steps {
+                sh 'chmod +x gradlew'
+                sh './gradlew bootjar'
+            }
+            post {
+                    failure {
+                      echo 'Gradle jar build failure !'
+                    }
+                    success {
+                      echo 'Gradle jar build success !'
+                    }
+            }
+
+    }
+
+    stage('Docker Image Build') {
+            steps {
+                sh "cp build/libs/springtest-0.0.1-SNAPSHOT.jar ./ROOT.jar"
+                sh "docker build . -t ${dockerHubRegistry}:${currentBuild.number}"
+                sh "docker build . -t ${dockerHubRegistry}:latest"
+            }
+            post {
+                    failure {
+                      echo 'Docker image build failure !'
+                    }
+                    success {
+                      echo 'Docker image build success !'
+                    }
+            }
+    }
+
+
+    stage('Docker Image Push') {
+            steps {
+                      sh "echo 도커허브비밀번호 | docker login -u dogsnack --password-stdin"
+                      sh "docker push ${dockerHubRegistry}:${currentBuild.number}"
+                      sh "docker push ${dockerHubRegistry}:latest"
+                      sleep 10 /* Wait uploading */
+                  
+            }
+            post {
+                    failure {
+                      echo 'Docker Image Push failure !'
+                      sh "docker rmi ${dockerHubRegistry}:${currentBuild.number}"
+                      sh "docker rmi ${dockerHubRegistry}:latest"
+                    }
+                    success {
+                      echo 'Docker image push success !'
+                      sh "docker rmi ${dockerHubRegistry}:${currentBuild.number}"
+                      sh "docker rmi ${dockerHubRegistry}:latest"
+                    }
+            }
+    }
+    
+    stage('K8S Manifest Update') {
+        steps {
+            git credentialsId: 'credential_kbo',
+                url: 'http://git.kbotest.shop/kbo/manifest.git', /* URL변경에 따른 수정 필요 */
+                branch: 'main'
+            sh "git config --global user.email 'test@naver.com'"
+            sh "git config --global user.name 'kbo'"
+            sh "sed -i 's/spring:.*\$/spring:${currentBuild.number}/g' springapp_deployment.yaml"
+            sh "git add springapp_deployment.yaml"
+            sh "git commit -m '[UPDATE] springapp ${currentBuild.number} image versioning'"
+            sshagent (credentials: ['GitLab_SSH_Key']) {
+                sh "git remote set-url origin git@git.kbotest.shop:kbo/manifest.git" /* URL변경에 따른 수정 필요 */
+                sh "git push -u origin main"
+            }  
+        }
+        post {
+                failure {
+                  echo 'K8S Manifest Update failure !@'
+                }
+                success {
+                  echo 'K8S Manifest Update success !!'
+                }
+        }
+    }
+
+  }
+}
+================================================
+
 
