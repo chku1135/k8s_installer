@@ -1,0 +1,109 @@
+##PV, PVC test
+#참고 사이트 : https://waspro.tistory.com/580
+#참고 사이트 : https://velog.io/@_zero_/%EC%BF%A0%EB%B2%84%EB%84%A4%ED%8B%B0%EC%8A%A4-PVPVC-%EA%B0%9C%EB%85%90-%EB%B0%8F-%EC%84%A4%EC%A0%95
+
+#pv 생성(pv.yaml)
+(ex) demo-pv 생성 yaml
+======================================
+apiVersion: v1
+
+kind: PersistentVolume
+
+metadata:
+  name: demo-pv
+
+sepc: 
+  capacity:
+    storage: 100Mi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/pv/log"
+  persistentVolumeReclaimPolicy: Retain
+======================================
+*accessModes:
+ - ReadWriteOnce: 하나의 노드에서만 RW 가능
+ - ReadOnlyMany: 여러 노드에서 Read 가능
+ - ReadWriteMany: 여러 노드에서 RW 가능
+
+*persistentVolumeReclaimPolicy
+ - Retain: PVC가 삭제되어도 PV의 데이터 보존 but 해당 PV를 다른 PVC가 사용하지 못하고, 재사용은 수동으로 PV를 반환해야 함
+ - Delete: PVC가 삭제 > PV 데이터 포함 PV 자체 삭제
+ - Recycle: PVC 삭제 > PV 데이터 삭제 but PV 자체는 보존
+            다른 PVC 바로 사용 가능
+            *현제는 deprecated됨
+
+
+#PVC 생성
+(ex) demo-pvC 생성 yaml
+======================================
+apiVersion: v1
+
+kind: PersistentVolumeClaim
+
+metadata:
+  name: demo-pvc
+
+sepc: 
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Mi
+======================================
+*accessModes: PV의 accessModes와 동일해야 bound 가능
+*requests: 사용을 원하는 볼륨의 요구 조건
+ - storage: 사용하고자 하는 최소한의 크기
+
+
+##pv, pvc 확인
+kubectl get persistentvolume | persistentvolumeclaims
+
+##pv, pvc 세부 확인
+kubectl describe persistentvolume [PV_이름] | [PVC_이름]
+
+
+#app 볼륨 마운트(deployment.yaml)
+(ex) 파드 볼륨 마운트
+======================================
+apiVersion: v1
+
+kind: Pod
+
+metadata:
+  name: webapp
+
+spec:
+  containers:
+  - name: webapp
+    image: nginx
+    volumeMounts:
+    - name: log-vol
+      mountPath: "/log"
+  volumes:
+  - name: log-vol
+    hostPath:
+      path: "/var/log/webapp"
+======================================
+
+(ex) 파드 PVC 마운트
+======================================
+apiVersion: v1
+
+kind: Pod
+
+metadata:
+  name: webapp
+
+spec:
+  containers:
+  - name: webapp
+    image: nginx
+    volumeMounts:
+    - name: log-vol
+      mountPath: "/log"
+  volumes:
+  - name: log-vol
+    persistentVolumeClaim:
+      claimName: demo-pvc
+======================================
