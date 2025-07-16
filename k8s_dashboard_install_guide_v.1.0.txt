@@ -162,3 +162,89 @@ kubectl edit deploy kubernetes-dashboard -n kubernetes-dashboard
 kubectl -n kubernetes-dashboard edit deployments kubernetes-dashboard
  --token-ttl=0              #영구 토큰 생성 > 토큰 재생성 후 접속
  --enable-skip-login        #토큰 인증을 비활성화
+
+
+
+
+
+##token 접속 관련 개선(secret-token)
+================================================================
+================================================================
+1. 사용된 대시보드 yaml 파일입니다.
+변경 내용은 아래와 같습니다.
+port 번호는 9090으로 바꾸고,
+
+--auto-generated-certificates 제거, 
+--insecure-bind-address=0.0.0.0 추가
+--enable-insecure-liogin 추가
+
+recomended.yaml
+        args:
+            #- --auto-generate-certificates # changed remove line
+            - --namespace=kubernetes-dashboard
+            - --insecure-bind-address=0.0.0.0 # added
+            - --enable-insecure-login # added
+            # Uncomment the following line to manually specify Kubernetes 
+
+
+2. service account 생성
+
+# admin-user.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kubernetes-dashboard
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: kubernetes-dashboard
+
+
+kubectl get -n kubernetes-dashboard sa
+
+#token 유무 확인
+kubectl get -n kubernetes-dashboard sa default
+kubectl get -n kubernetes-dashboard sa admin-user
+
+#secret 확인
+kubectl get -n kubernetes-dashboard secret
+
+kubectl apply -f admin-user.yaml
+
+
+##metadata.name, service-account.name을 admin-user로 바꾼 secret을 생성
+secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admin-user-token
+  namespace: kubernetes-dashboard
+  annotations:
+    kubernetes.io/service-account.name: admin-user
+type: kubernetes.io/service-account-token
+
+or 
+# secret.yaml에 해당 내용이 저장되어 있다는 가정으로 sed 사용
+sed 's/default/admin-user/g' secret.yaml > admin-user-secret.yaml
+cat admin-user-secret.yaml
+
+#생성된 secret 확인
+kubectl get -n kubernetes-dashboard secret
+
+#token 확인
+kubectl describe -n kubernetes-dashboard secrets admin-user-token
+
+#serivce account 확인
+kubectl describe -n kubernetes-dashboard sa admin-user
