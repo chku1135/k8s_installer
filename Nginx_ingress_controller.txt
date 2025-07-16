@@ -1,0 +1,92 @@
+##Nginx Ingress Controller
+#참고 사이트 : https://velog.io/@dhkim1522/k8s-%EC%9D%B8%EA%B7%B8%EB%A0%88%EC%8A%A4-%EC%BB%A8%ED%8A%B8%EB%A1%A4%EB%9F%AC-ingress-controller-%EA%B5%AC%EC%B6%95%ED%95%98%EA%B8%B0
+
+#Nginx ingress controller installing
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.6.4/deploy/static/provider/cloud/deploy.yaml
+
+#설치 확인
+kubectl get all -n ingress-nginx
+
+#ingress yaml 배포
+(ex)Ingress Sample yaml
+=========================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    kubernetes.io/ingress.class: "nginx"
+  spec:
+    rules:
+    - host: "ingress.test.com"      #호출할 host 경로 지정
+      http:
+        paths:
+        - pathType: Prefix
+          path: /test               #ingress.test.com/test로 요청
+          backend:
+            service:
+              name: service-test    #k8s 'serivce-test' service를 호출
+              port:
+                number: 80          #serivce 호출 port
+=========================================================
+#controller 설치 시 기본 라벨명 : ingress-nginx 따라서 배포할 오브젝트의 label 명을 ingress-nginx로 해주어야 함
+
+
+#service 생성
+(ex)Service Sample yaml
+=========================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-test
+spec:
+  selector:
+    app: service_test_pod   #pod명
+  ports:
+    - protocol: TCP
+      port: 80              #호출할 port
+      targetPort: 8080      #container port
+=========================================================
+
+
+#Deployment yaml
+(ex)Deployment Sample yaml
+=========================================================
+kind: Deployment
+apiVersion: apps/v1
+metandata:
+  name: service-test
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: service_test_pod
+  template:
+    metadata:
+      labels:
+        apps: service_test_pod
+    spec:
+      containers:
+      - name: simple-http
+        image: python:2.7
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args: ["-c", "echo '<p>Hello from $(hostname)</p>' > index.html; python -m SimpleHTTPServer 8080"]
+        ports:
+        - name: http
+          containerPort: 8080
+=========================================================
+
+#host 추가
+sudo vi /etc/hosts
+==============(추가)==============
+${workernode_ip} ingress.test.com
+=================================
+
+#web에서 확인
+kubectl get svc -n ingress-nginx
+ > ingress-nginx-controller port 확인
+
+(web)
+ingress.test.com:30968/test > 접속 확인
