@@ -164,12 +164,30 @@ kubectl -n kubernetes-dashboard edit deployments kubernetes-dashboard
  --enable-skip-login        #토큰 인증을 비활성화
 
 
+# kubectl edit clusterrole kubernetes-dashboard
+(헤딩 부분 수정)
+rules:
+- apiGroups:
+  #- metrics.k8s.io
+  - '*'
+  resources:
+  #- pods
+  #- nodes
+  - '*'
+  verbs:
+  #- get
+  #- list
+  #- watch
+  - '*'
+
 
 
 
 ##token 접속 관련 개선(secret-token)
 ================================================================
 ================================================================
+
+kubectl edit deploy kubernetes-dashboard -n kubernetes-dashboard
 1. 사용된 대시보드 yaml 파일입니다.
 변경 내용은 아래와 같습니다.
 port 번호는 9090으로 바꾸고,
