@@ -139,3 +139,6 @@ https://nextshds.tistory.com/63
 ##Jenkins CI/CD 구축 (With Docker + Github + Docker Hub)
 #참고 사이트 : https://j-d-i.tistory.com/377
 
+##Intelij - gradle project
+#참고 사이트 : https://commnetall.tistory.com/106
+
