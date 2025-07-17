@@ -1,0 +1,16 @@
+#jenkins ssh plugin
+
+1. jenkins main(dashboard) > Plugin Manager > SSH 검색
+ > SSH plugin install(Publish Over SSH 플러그인은 보안 이슈로 2022년 1월부터 suspend)
+
+2. jenkins main(dashboard) > 시스템 설정 
+ > SSH 접속할 host, private key 등록
+ - hostname(ip정보), port(22), Credentails(add > 접근할 서버 id, pw 등록)
+
+##ssh 배포 test(서버 직접 배포)
+참고 사이트: https://velog.io/@jbc21c/%EA%B0%9C%EB%B0%9C%ED%99%98%EA%B2%BD-Jenkins%EB%A1%9C-CI-%EA%B5%AC%EC%B6%95%ED%95%98%EA%B8%B0-ssh%EB%B0%B0%ED%8F%AC
+https://onethejay.tistory.com/151
+
+##git source 그대로 ssh 배포 진행 시
+rsync -a --delete ${복사할 디랙토리경로/} ${교체될 디랙토리 경로/}
+  >디랙토리 경로 끝에 / 반드시 넣어둘것
