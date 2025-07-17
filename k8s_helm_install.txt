@@ -1,0 +1,14 @@
+##helm install
+#공식 : https://helm.sh/docs/intro/install/
+#참고 사이트 : https://velog.io/@hsh_124/%EC%BF%A0%EB%B2%84%EB%84%A4%ED%8B%B0%EC%8A%A4-helm
+
+curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+sudo apt-get install apt-transport-https --yes
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install helm
+
+
+##helm repo - gitlab으로
+#참고 사이트 : https://linux.systemv.pe.kr/kubernetes/gitlab-helm-%EC%A0%80%EC%9E%A5%EC%86%8C-%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0/
+#참고 사이트 : https://velog.io/@brillog/GitLab%EC%9D%98-Helm-Package-Registry-%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0
