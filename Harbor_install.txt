@@ -53,3 +53,53 @@ mkdir -p /home/ubuntu/harbor/harbor_data
 sudo ./install.sh
 
 #http://${hostname}:#{port} web 접근
+
+
+
+==============================================================
+============================[참고]============================
+==============================================================
+
+#(docker hub)docker repository 구축
+#참고 사이트 : https://kkjsw17.tistory.com/9
+
+##docker 내부 repository(harbor)
+https://judo0179.tistory.com/entry/Private-Docker-Registry-Harbor-%EC%84%A4%EC%B9%98
+https://musclebear.tistory.com/187
+
+** test 전 push/pull test 위한 image 준비
+
+##설치 완료 후 기존 docker repository > harbor로 변경
+sudo vi /etc/docker/daemon.json
+(수정)
+{
+    "insecure-registries":["${harbor_ip}:${port}]
+}
+
+#harbor HTTPS 인증서 (ca.crt) 복사
+/etc/docker/cerets.d/${harbor_ip}/ca.crt 로 복사
+
+sudo systemctl daemon-reexec
+sudo systemctl restart docker
+
+##k8s deploy 시 yaml 수정
+containers:
+- name: myapp
+  image: ${harbor_ip}:${port}/myproject/myapp:1.0
+  imagePullPolicy:IfNotPresent
+
+##배포 시 harbor 로그인 필요한 경우
+##k8s namespace secret 생성
+kubectl create secret docker-Registry regcred \
+  --docker-server=${harbor_ip}:${port} \
+  --docker-username=${harbor_id} \
+  --docker-password=${harbor_pw} \
+  --docker-email=${email주소} \
+  -n my-namespace
+
+deployment.yaml secret 사용
+spec:
+  imagePullSecrets:
+  - name: regcred
+
+
