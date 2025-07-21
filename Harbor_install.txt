@@ -17,10 +17,82 @@ tar xvf harbor-offline-installer-v2.13.1.tgz
 cd ~/${harbor_directory}
 cp harbor.yml.tmpl harbor.yml
 
+#certs 생성(https://goharbor.io/docs/2.7.0/install-config/configure-https/)
+#Generate a Certificate Authority Certificate (인증 기관 인증서 생성)
+mkdir ~/certs
+cd cerets
+openssl genrsa -out ca.key 4096
+openssl req -x509 -new -nodes -sha512 -days 3650 \
+ -subj "/C=CN/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=10.0.13" \
+ -key ca.key \
+ -out ca.crt
+
+#Generate a Server Certificate (서버 인증서 생성)
+mkdir ~/certs
+cd cerets
+openssl genrsa -out 10.0.2.13.key 4096
+openssl req -sha512 -new \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=10.0.2.13" \
+    -key 10.0.2.13.key \
+    -out 10.0.2.13.csr
+
+cat > v3.ext <<-EOF
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1=10.0.2.13
+DNS.2=127.0.0.1
+DNS.3=k8s-repo
+EOF
+
+openssl x509 -req -sha512 -days 3650 \
+    -extfile v3.ext \
+    -CA ca.crt -CAkey ca.key -CAcreateserial \
+    -in 10.0.2.13.csr \
+    -out 10.0.2.13.crt
+
+
+sudo mkdir -p /data/cert
+sudo cp 10.0.2.13.crt /data/cert
+sudo cp 10.0.2.13.key /data/cert
+
+cd /data/cert
+
+#docker 사용으로 crt -> cert 변경
+sudo openssl x509 -inform PEM -in 10.0.2.13.crt -out 10.0.2.13.cert
+
+#docker cets.d ca file 업로드
+#docker 설치된 server
+sudo mkdir -p /etc/docker/certs.d/10.0.2.13
+(생성 ca file 업로드)
+10.0.2.13.cert
+10.0.2.13.crt
+10.0.2.13.key
+ca.crt
+
+sudo apt update
+sudo apt install ca-certificates
+
+sudo update-ca-certificate
+
+
+
+
+
+
+
+
+
+
+
 #harbor.yaml 수정
  > hostname, port, data_volume 경로 수정
 ==============================================================
-hostname: 192.168.0.10
+hostname: 10.0.2.13
 
 # http related config
 http:
@@ -32,8 +104,8 @@ http:
   # https port for harbor, default is 443
   # port: 443
   # The path of cert and key files for nginx
-  # certificate: /your/certificate/path
-  # private_key: /your/private/key/path
+  # certificate: /data/cert/10.0.2.13.crt
+  # private_key: /data/cert/10.0.2.13.key
   # enable strong ssl ciphers (default: false)
   # strong_ssl_ciphers: false
   
@@ -103,3 +175,7 @@ spec:
   - name: regcred
 
 
+
+#harbor web 초기 id/pw
+admin
+Harbor12345
