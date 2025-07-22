@@ -83,7 +83,21 @@ Jenkins 관리 > 플러그인 관리로 이동하여 플러그인 설치를 진�
 
 jenkins lts 설치시 설치되어 있음(자동설치) : git plugin, Gradle Plugin
 
-설치 필요 : GitLab, Generic Webhook Trigger, Post build task, Docker, Docker Commons, Docker Pipeline, Docker API, SSH Agent
+설치 필요 : 
+GitLab, 
+Generic Webhook Trigger, 
+Post build task, 
+Docker, 
+Docker Commons, 
+Docker Pipeline, 
+Docker API, 
+SSH Agent
+
+##github-jenkins webhook 연동 
+# 참고 사이트 : https://ziszini.tistory.com/108
+#github Payload URL 세팅 :  https://ziszini.tistory.com/110
+
+
 
 *만약 설치할 플러그인이 보이지 않는다면 "설치 가능" 항목으로 이동하여 설치를 진행합니다.
 
