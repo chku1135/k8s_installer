@@ -12,3 +12,42 @@ sudo apt-get install helm
 ##helm repo - gitlab으로
 #참고 사이트 : https://linux.systemv.pe.kr/kubernetes/gitlab-helm-%EC%A0%80%EC%9E%A5%EC%86%8C-%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0/
 #참고 사이트 : https://velog.io/@brillog/GitLab%EC%9D%98-Helm-Package-Registry-%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0
+
+
+================================================================================
+================================================================================
+##helm install-harbor 연동
+참고 사이트 : https://gruuuuu.hololy.org/cloud/l-helm-basic/
+
+#(master node) helm install
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 > get_helm.sh
+chmod 700 get_helm.sh
+./get_helm.sh
+
+(helm install 확인)
+helm version
+
+#helm repository 추가
+helm ropo add stable https://kubernetes-chart.storage.goolgeapis.com
+
+#chart list 확인
+helm search repo stable
+
+#helm chart update
+helm repo update
+
+##helm repo -> harbor로 변경
+helm repo add harbor https://<Harbor URL>/chartrepo/<프로젝트 이름>
+(ex)helm repo add my-harbor https://your-harbor.com/chartrepo/my-project
+
+1. 차트 패키징:
+helm package <차트 디렉토리> 명령어로 차트를 tgz 파일로 패키징합니다.
+예: helm package mychart
+
+2. 인증 설정:
+Harbor는 Private 레지스트리이므로, helm registry login 명령어를 사용하여 사용자 인증을 설정합니다.
+예: helm registry login -u <username> <Harbor URL>
+
+3. 차트 푸시:
+helm push <패키징된 차트 파일> oci://<Harbor URL>/<프로젝트 이름> 명령어를 사용하여 차트를 Harbor에 푸시합니다.
+예: helm push mychart-0.1.0.tgz oci://your-harbor.com/my-project
