@@ -290,4 +290,7 @@ pipeline {
 }
 ================================================
 
+#troubleshoot
+##jenkins-github credentials 등록 안될때 / jennkins plugin 후 restart 시 초기화 될때
+#참고 사이트 : https://froggydisk.github.io/eighteenth-post/
 
