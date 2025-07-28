@@ -257,6 +257,11 @@ jenkins@jenkins-bf6b8d5fb-bgrfk:/$ cat /var/jenkins_home/secrets/initialAdminPas
 <<PASSWORD값>>
 
 
+#jenkins cloud 설정
+#참고 사이트 : https://kindloveit.tistory.com/125
+
+
+
 
 
 
