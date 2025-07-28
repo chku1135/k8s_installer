@@ -142,3 +142,27 @@ https://nextshds.tistory.com/63
 ##Intelij - gradle project
 #참고 사이트 : https://commnetall.tistory.com/106
 
+
+=========================================================
+##jenkins github credential 입력 안됨
+/etc/nginx > nginx.conf파일 수정
+proxy_set_header X-Real-IP $remote_addr
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header Host $http_host;
+proxy_set_header X-Forwarded-Proto $scheme;
+
+#nginx reload
+sudo service nginx reload
+
+##jenkins plugin 적용 후 재시작 시 초기화 되는 현상 수정
+#jenkins pv policy 수정
+kubectl patch pv [your-pv-name] -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+
+##jenkins ssh 생성 시
+kubectl exec -it [jenkins-pod-name] --bash
+cd /var/jenkins_home/.ssh
+ssh-keygen -t rsa -b 4096 -C "jenkins@yourdomain.com"
+chmod 600 id_rsa
+chmod 644 id_rsa_pub
+=========================================================
+
