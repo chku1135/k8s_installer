@@ -1,6 +1,19 @@
 ##jenkins pipeline test
 #참고 사이트 : https://infinitecode.tistory.com/117
 
+##jenkins maven build
+
+#jenkins plugin install
+jenkins 관리 > 플러그인 관리 > 설치 가능 > "maven" 검색
+> 하기 플러그인 설치
+ - Maven Integeration
+ - Maven Invorker
+ - Publish Over SSH
+
+#JDK Maven 경로 지정
+jenkins 관리 > Global Tool Configuration
+JDK 경로 지정
+
 1. project 생성
  - NewItem > 프로젝트 명 입력, pipeline 선택 > ok
 
