@@ -166,3 +166,5 @@ chmod 600 id_rsa
 chmod 644 id_rsa_pub
 =========================================================
 
+#jenkins docker build troubleshoot
+https://froggydisk.github.io/21th-post/
