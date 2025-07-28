@@ -1,4 +1,5 @@
 #jenkins ssh plugin
+#참고 사이트 : https://wonistorage.tistory.com/97
 
 1. jenkins main(dashboard) > Plugin Manager > SSH 검색
  > SSH plugin install(Publish Over SSH 플러그인은 보안 이슈로 2022년 1월부터 suspend)
@@ -14,3 +15,5 @@ https://onethejay.tistory.com/151
 ##git source 그대로 ssh 배포 진행 시
 rsync -a --delete ${복사할 디랙토리경로/} ${교체될 디랙토리 경로/}
   >디랙토리 경로 끝에 / 반드시 넣어둘것
+
+
