@@ -18,9 +18,9 @@ data:
     http {
       server {
         listen 80
-        server_name jenkins.example.com;    #젠킨스 서버
+        server_name <worker-node-ip>;    #젠킨스 서버
         location / {
-          proxy_pass http://jenkins-service:8080;   #jenkins 서비스 주소
+          proxy_pass http://<worker-node-ip>:32000;   #jenkins 서비스 주소
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;proxy_set_header Host $http_host;
           proxy_set_header X-Forwarded-Proto $scheme; # <- 중요
