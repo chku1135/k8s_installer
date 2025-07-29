@@ -260,10 +260,7 @@ jenkins@jenkins-bf6b8d5fb-bgrfk:/$ cat /var/jenkins_home/secrets/initialAdminPas
 #jenkins cloud 설정
 #참고 사이트 : https://kindloveit.tistory.com/125
 
-
-
-
-
-
-
-# jenkins pipeline 테스트
+#pv 정책변경
+#참고 사이트 : https://kubernetes.io/ko/docs/tasks/administer-cluster/change-pv-reclaim-policy/
+kubectl get pv -A
+kubectl patch pv <your-pv-name> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
