@@ -1,0 +1,5 @@
+#nginx 서버 설정
+#참고 사이트 : https://velog.io/@csk917work/Nginx-%EC%84%9C%EB%B2%84-%EC%84%A4%EC%A0%95
+
+#nginx ingress
+#참고 사이트 : https://kschoi728.tistory.com/266
