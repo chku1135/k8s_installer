@@ -1,7 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx
+  name: nginx-deployment
+  namespace: default
 spec:
   replicas: 1
   selector:
@@ -14,18 +15,14 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx
+        image: nginx:latest
         ports:
         - containerPort: 80
         volumeMounts:
-        - mountPath: /etc/nginx/nginx.conf
-          readOnly: true
-          name: nginx-main-conf-test
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/nginx.conf
           subPath: nginx.conf
       volumes:
-      - name: nginx-main-conf-test
+      - name: nginx-config-volume
         configMap:
-          name: nginx-conf
-          items:
-            - key: nginx-main.conf
-              path: nginx.conf
+          name: nginx-config
