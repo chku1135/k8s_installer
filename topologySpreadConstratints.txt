@@ -1,0 +1,51 @@
+#pod를 node 별 분산
+
+topologySpreadConstratints
+============================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: example-pod
+spec:
+  # -- Configure a topology spread constraint
+  topologySpreadConstraints:
+    - maxSkew: <integer>
+      topologyKey: <string>
+      whenUnsatisfiable: <string>
+      labelSelector: <object>
+============================================
+
+
+1. maxSkew
+maxSkew 값은 파드가 균등하지 않게 분산될 수 있는 정도를 의미합니다. 
+말이 조금 헷갈리는데 쉽게 말하면, 노드 간에 스케줄링된 Pod의 갯수 차이 허용치입니다.
+예를 들어 이 값이 1이면, 노드 간에 Pod 갯수 차이가 1개까지 발생하는 것은 허용하는 것이죠.
+이 필드는 필수이며, 0 보다 큰 값을 사용해야 합니다.
+
+maxSkew가 구체적으로 동작하는 방식은 whenUnsatisfiable 의 값에 따라 달라집니다.
+
+whenUnsatisfiable: DoNotSchedule
+    * 이 경우, maxSkew는 대상 토폴로지에서 일치하는 파드 수와 전역 최솟값(global minimum, 적절한 도메인 내에서 일치하는 파드의 최소 수)사이의 최대 허용 차이 값을 뜻합니다.
+    * 예를 들어, 3개의 존에 각각 2, 2, 1개의 일치하는 파드가 있다고 가정하면 전역 최솟값 은 1로 설정됩니다.
+    전역 최솟값과의 차이는 1, 1, 0 으로, maxSkew 가 1 이상이면 문제없겠네요.
+
+whenUnsatisfiable: ScheduleAnyway
+이 경우, kube-scheduler는 차이(skew)를 줄이는 데 도움이 되는 토폴로지에 더 높은 우선 순위를 부여합니다.
+
+
+2. topologyKey
+노드 레이블의 키(key) 값입니다. 이 키와 동일한 값을 가진 레이블이 있는 노드는 동일한 토폴로지에 있는 것으로 간주합니다.
+토폴로지의 각 인스턴스(즉, <키, 값> 쌍)를 도메인이라고 합니다.
+
+2. whenUnsatisfiable
+    * topologySpreadConstraint을 만족하지 않을 경우 파드를 처리하는 방법을 정의합니다.
+
+3. DoNotSchedule
+    * (기본값) 스케줄러에 스케줄링을 하지 않도록 지시합니다.
+
+4. ScheduleAnyway
+    * 차이(skew)를 최소화하는 노드에 높은 우선 순위를 부여하면서, 스케줄링을 계속하도록 지시합니다.
+
+5. labelSelector
+토폴로지 내에서 일치하는 파드를 찾는 데 사용되는 셀렉터입니다.
+이 레이블 셀렉터와 일치하는 파드의 수를 계산하여 해당 토폴로지 도메인에 속할 파드의 수를 결정합니다.
