@@ -1,0 +1,162 @@
+##k8s Cluster backup(etcd)
+#참고 사이트: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+
+ - etcd: 모든 클러스터 데이터 백업 저장소, 고가용성 키 값이 저장되는 저장소
+         홀수 멤버의 클러스터로 실행, 리더 기반 분산 시스템(quorum 방식의 HA 지원하기 때문)
+
+ - (참고) alias 세팅 << 사용 편의 
+    alias etcdctl='ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --certs=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key'
+        >> 사용 예제 
+        etcdctl list --write-out-table
+
+
+#endpoint, cacert, cert, key 정보 확인
+cat /etc/kubernetes/manifests/etcd.yaml
+
+(출력예제)
+========================================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubeadm.kubernetes.io/etcd.advertise-client-urls: https://192.168.1.10:2379
+  creationTimestamp: null
+  labels:
+    component: etcd
+    tier: control-plane
+  name: etcd
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - etcd
+    - --advertise-client-urls=https://192.168.1.10:2379
+    - --cert-file=/etc/kubernetes/pki/etcd/server.crt
+    - --client-cert-auth=true
+    - --data-dir=/var/lib/etcd
+    - --initial-advertise-peer-urls=https://192.168.1.10:2380
+    - --initial-cluster=m-k8s=https://192.168.1.10:2380
+    - --key-file=/etc/kubernetes/pki/etcd/server.key
+    - --listen-client-urls=https://127.0.0.1:2379,https://192.168.1.10:2379
+    - --listen-metrics-urls=http://127.0.0.1:2381
+    - --listen-peer-urls=https://192.168.1.10:2380
+    - --name=m-k8s
+    - --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt
+    - --peer-client-cert-auth=true
+    - --peer-key-file=/etc/kubernetes/pki/etcd/peer.key
+    - --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+    - --snapshot-count=10000
+    - --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+    image: k8s.gcr.io/etcd:3.4.3-0
+    imagePullPolicy: IfNotPresent
+    livenessProbe:
+      failureThreshold: 8
+      httpGet:
+        host: 127.0.0.1
+        path: /health
+        port: 2381
+        scheme: HTTP
+      initialDelaySeconds: 15
+      timeoutSeconds: 15
+    name: etcd
+    resources: {}
+    volumeMounts:
+    - mountPath: /var/lib/etcd
+      name: etcd-data
+    - mountPath: /etc/kubernetes/pki/etcd
+      name: etcd-certs
+  hostNetwork: true
+  priorityClassName: system-cluster-critical
+  volumes:
+  - hostPath:
+      path: /etc/kubernetes/pki/etcd
+      type: DirectoryOrCreate
+    name: etcd-certs
+  - hostPath:
+      path: /var/lib/etcd
+      type: DirectoryOrCreate
+    name: etcd-data
+status: {}
+========================================================================================
+
+#snapshot save 명령
+==================================================================
+ETCDCTL_API=3 etcdctl --endpoints={advertise-client-urls} \
+--cacert=<trusted-ca-file> --cert=<cert-file> --key=<key-file> \
+snapshot save <backup-file-location>
+
+(예제)
+ETCDCTL_API=3 etcdctl --endpoints https://192.168.1.10:2379 \
+--cacert=/etc/kubernetes/pki/etcd/ca.crt \
+--cert=/etc/kubernetes/pki/etcd/server.crt \
+--key=/etc/kubernetes/pki/etcd/server.key \
+snapshot save /root/test
+==================================================================
+(alias 사용)
+etcdctl snapshot save /root/test
+etcdctl snapshot save /root/etcd-backup/etcd-`date +%Y%m%d_%H%M%S`
+
+#백업 파일 확인
+ls -al /root/
+ >> test 파일 확인
+
+#snapshot 복원
+export ETCDCTL_API=3 etcdctl snapshot restore --data-dir <data-dir-location> snapshotdb
+ >> ETCDCTL_API=3 etcdctl snapshot restore --data-dir /root/restore /root/test
+    - 복구될 디랙토리: --data-dir
+    - 백업된 파일 정보 입력: snapshot
+
+tree /root/restore
+/root/restore/
+`-- member
+    |-- snap
+    |   |-- 0000000000000001-0000000000000001.snap
+    |   `-- db
+    `-- wal
+        `-- 0000000000000000-0000000000000000.wal
+
+data 디랙토리, mountPath (/root/restore 경로) 변경
+vi /etc/kubernetes/manifests/etcd.yaml
+
+============================================================
+spec:
+  containers:
+  - command:
+    - etcd
+    - --advertise-client-urls=https://192.168.1.10:2379
+    - --cert-file=/etc/kubernetes/pki/etcd/server.crt
+    - --client-cert-auth=true
+    - --data-dir=/var/lib/etcd      >> /root/restore
+...
+    volumeMounts:
+    - mountPath: /var/lib/etcd      >> /root/restore
+      name: etcd-data
+    - mountPath: /etc/kubernetes/pki/etcd
+      name: etcd-certs
+...
+============================================================
+
+[snapshot 복원 -다른 방법]
+(master 여러개인 경우)
+etcdctl snapshot restore {백업파일명} \
+--name {master1_hostname} \
+--data-dir /root/restore \
+--initial-cluster {master1_hostname}=https://{master1_IP}:2379,{master2_hostname}=https://{master2_IP}:2379,{master3_hostname}=https://{master3_IP}:2379 \
+--initial-advertise-peer-urls https://{master1_IP}:2379
+(master 한개인 경우)
+etcdctl snapshot restore {백업파일명} \
+--name {master1_hostname} \
+--data-dir /root/restore \
+--initial-cluster {master1_hostname}=https://{master1_IP}:2379 \
+--initial-advertise-peer-urls https://{master1_IP}:2379
+
+ >> data-dir /var/lib/etcd 지정 후 /root/restore 파일을 해당 경로 옮겨 주어도 OK
+
+
+#etcd 컨테이너 재기동
+systemctl restart etcd
+or crictl stop {etcd_container_id} > crictl rm {etcd_container_id}
+
+
+# 복원 확인
+kubectl get pod -A
