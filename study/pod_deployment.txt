@@ -1,0 +1,64 @@
+##k8s pod
+#lable 정보로 조회
+kubectl get pod -I {lable}
+
+#cpu 사용량 많은 pod 조회
+kubectl top pod -I {lable}
+(해당 파드명 파일로 저장) echo {파드명} > {요구하는 파일명}
+
+#특정 node에 pod 생성
+ - 특정 lable에 pod 생성
+
+ 1. 기본 yaml 템플릿 생성
+ kubectl run ckatest --image nginx --dry-run=client -o yaml > pod.yaml
+
+ vi pod.yaml
+    =================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: ckatest
+      name: ckatest
+    spec:
+      containers:
+      - image: nginx
+        name: ckatest
+        resources: {}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      nodeSelector:         #추가
+        disktype: ssd       #추가
+    =================================
+ 2. pod 생성
+ kubectl apply -f pod.yaml
+
+#해당 파드 로그 파일로 출력
+kubectl get pod -A      << 해당 파드명 확인
+kubectl logs {파드명} > {파일경로 지정}
+
+# deployment scaling >> replicas 설정
+kubectl scale deployment {deployment 명} --replicas={수정값}
+
+#멀티 컨테이너 파드 배포(pod.yaml > container 여러개)
+ 1. 기본 yaml 템플릿 생성
+ kubectl run ckatest --image nginx --dry-run=client -o yaml > pod.yaml
+
+ vi pod.yaml
+    =================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: multi-containers
+    spec:
+      containers:
+      - name: {containerA}
+        image: {ImageA}
+      - name: {containerb}
+        image: {ImageB}
+      - name: {containerC}
+        image: {ImageC}
+    =================================
+ 2. pod 생성
+ kubectl apply -f pod.yaml
