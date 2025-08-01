@@ -168,3 +168,10 @@ chmod 644 id_rsa_pub
 
 #jenkins docker build troubleshoot
 https://froggydisk.github.io/21th-post/
+
+##pipeline 참고
+#참고 사이트 : https://happycloud-lee.tistory.com/56
+
+##helm cicd
+#참고 사이트 : https://happycloud-lee.tistory.com/10
+#heml download : https://github.com/helm/helm/releases
