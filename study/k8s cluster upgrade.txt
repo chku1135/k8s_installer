@@ -1,0 +1,139 @@
+#k8s cluster upgrade 진행
+ - cordon: 특정 node를 스케줄러에서 제외 > 파드할당 중지 >> 기존 node의 파드는 그대로 존재
+ - drain: 특정 node를 스케줄러에서 제외 > 파드할당 중지 >> 기존 node의 파드 다른 노드로 이동 
+ - 주의사항 : 한 단계씩 순차적으로 upgrade 진행(1.27 -> 1.28 -> 1.29 와 같이 단계)
+
+(작업 순서)
+==========================================
+#master node upgrade
+1. master node drain
+2. master node kubeadm upgrade
+3. master node kubectl, kubelet upgrade
+4. master node uncordon
+
+#worker node upgrade
+1. worker node drain
+2. worker node kubeadm upgrade
+3. worker node kubectl, kubelet upgrade
+4. worker node uncordon
+==========================================
+ >> kubectl이 master node에만 설치되어 있는 경우 kubectl 명령어 사용 시 
+    ssh 접속 > master node에서 명령어 실행
+
+
+
+1. master node upgrade
+1-1. 노드확인
+    kubectl get node
+
+1-2. master node 접속 / drain
+    kubectl drain {master_node명} --ignore-daemonsets       #daemonset 파드는 제외
+    > kubectl drain controlplane --ignore-daemonsets
+    > (출력) {노드명} evicted 확인
+
+1-3. kubeadm upgrade
+    kubeadm version             #version 확인
+    apt update
+    apt-cache madison kueadm    #kubeadm 사용가능 version 확인
+
+    #kubeadm version upgrade
+    apt-mark unhold kubeadm && \
+    apt-get update && apt-get install -y kubeadm=1.19.00 && \
+    apt-mark hold kubeadm
+
+    kubeadm version             #upgrade 확인
+
+    kubeadm upgrade plan        #컴포넌트 upgrade 가능버전 확인
+    (출력 예제)
+    =========================================================================================
+    Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
+    COMPONENT   CURRENT       AVAILABLE
+    kubelet     2 x v1.18.0   v1.19.12
+
+    Upgrade to the latest stable version:
+
+    COMPONENT                 CURRENT   AVAILABLE
+    kube-apiserver            v1.18.0   v1.19.12
+    kube-controller-manager   v1.18.0   v1.19.12
+    kube-scheduler            v1.18.0   v1.19.12
+    kube-proxy                v1.18.0   v1.19.12
+    CoreDNS                   1.6.7     1.7.0
+    etcd                      3.4.3-0   3.4.9-1
+    =========================================================================================
+
+    #컴포넌트 upgrade
+    kubeadm upgrade apply v1.19.0
+    >> SUCCESS! 확인
+
+1-4. kubelet / kubectl upgrade
+    #kubelet / kubectl upgrade
+    apt-mark unhold kubelet kubectl && \
+    apt-get update && apt-get install -y kubelet=1.19.0-00 kubectl=1.19.0-00 && \
+    apt-mark hold kubelet kubectl
+
+    sudo systemctl daemon-reload
+    sudo systemctl restart kubelet      #kubelet 재시작
+
+    #kubelet / kubectl upgrade 확인
+    kubelet --version
+    (출력 예제)
+    Kubernetes v1.19.0
+
+    kubectl version
+    (출력 예제)
+    Client Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.0", GitCommit:"e19964183377d0ec2052d1f1fa930c4d7575bd50", GitTreeState:"clean", BuildDate:"2020-08-26T14:30:33Z", GoVersion:"go1.15", Compiler:"gc", Platform:"linux/amd64"}
+    Server Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.0", GitCommit:"e19964183377d0ec2052d1f1fa930c4d7575bd50", GitTreeState:"clean", BuildDate:"2020-08-26T14:23:04Z", GoVersion:"go1.15", Compiler:"gc", Platform:"linux/amd64"}
+
+    #master node uncordon
+    kubectl uncordon {master_node명}
+    > kubectl uncordon controlplane
+
+
+
+1. worker node upgrade
+1-1. 노드확인
+    kubectl get node
+
+1-2. worker node 접속 / drain
+    kubectl drain {worker_node명} --ignore-daemonsets       #daemonset 파드는 제외
+    > kubectl drain node01 --ignore-daemonsets
+    > (출력) {노드명} evicted 확인
+
+1-3. kubeadm upgrade
+    kubeadm version             #version 확인
+    ==================[worker node에서는 X]===================
+    apt update
+    apt-cache madison kueadm    #kubeadm 사용가능 version 확인
+    =========================================================
+
+    #kubeadm version upgrade    << master node완 같은 version으로 작업
+    apt-mark unhold kubeadm && \
+    apt-get update && apt-get install -y kubeadm=1.19.0-00 && \
+    apt-mark hold kubeadm
+
+    kubeadm upgrade node       #node upgrade
+    >> [upgrade] The configuration for this node was successfully updated! 확인
+
+1-4. kubelet / kubectl upgrade
+    #kubelet / kubectl upgrade
+    apt-mark unhold kubelet kubectl && \
+    apt-get update && apt-get install -y kubelet=1.19.0-00 kubectl=1.19.0-00 && \
+    apt-mark hold kubelet kubectl
+
+    sudo systemctl daemon-reload
+    sudo systemctl restart kubelet      #kubelet 재시작
+
+    #kubelet / kubectl upgrade 확인
+    kubelet --version
+    (출력 예제)
+    Kubernetes v1.19.0
+
+    kubectl version
+    (출력 예제)
+    Client Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.0", GitCommit:"e19964183377d0ec2052d1f1fa930c4d7575bd50", GitTreeState:"clean", BuildDate:"2020-08-26T14:30:33Z", GoVersion:"go1.15", Compiler:"gc", Platform:"linux/amd64"}
+    Server Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.0", GitCommit:"e19964183377d0ec2052d1f1fa930c4d7575bd50", GitTreeState:"clean", BuildDate:"2020-08-26T14:23:04Z", GoVersion:"go1.15", Compiler:"gc", Platform:"linux/amd64"}
+
+    #worker node uncordon
+    kubectl uncordon {worker_node명}
+    > kubectl uncordon node01
+ 
