@@ -1,0 +1,130 @@
+#ServiceAccount
+1. yaml 생성
+========================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-reader
+========================
+
+kubectl create ServiceAccount pod-reader
+
+2. 조회
+kubectl get serviceaccounts/pod-reader -o yaml
+================================================
+#출력:
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  creationTimestamp: 2015-06-16T00:12:59Z
+  name: pod-reader
+  namespace: default
+  resourceVersion: "272500"
+  uid: 721ab723-13bc-11e5-aec2-42010af0021e
+secrets:
+- name: pod-reader-token-bvbk5      #token
+================================================
+
+#RBAC(Role-Based Access Control)
+ - serviceaccount: 역할을 부여하기 위한 대상
+ - binding: 실제 역할을 만들어 serviceaccount에 할당
+ - 역할
+   > role: 특정 네임스페이스
+   > clusterRole: 전체 클러스터
+ - binding 종류
+   > roleBinding: 특정 네임스페이스에만 유효
+   > ClusterRoleBiding: 모든 네임스페이스에 공통 적용
+
+1. Role yaml 생성
+================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: pod-read-role
+rules:
+- apiGroups: [""]       #deployment - version({그룹명}/{버전}) ex: apiGroups: ["apps/v1"]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+================================================
+
+ >> deployment 목록 조회 예제
+================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: deployment-list-role
+rules:
+- apiGroups: ["apps/v1"] 
+  resources: ["deployment"]
+  verbs: ["list"]
+================================================
+
+
+kubectl create role pod-read-role --verb=get --verb=list --verb=watch --resource=pods
+  > 네임스페이스: default
+  > pod 리소스 - get, watch, list 권한 부여
+
+
+2. RoleBinding 
+================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-read-role-to-pod-reader
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: pod-read-role
+  apiGroup: rbac.authorization.k8s.io
+================================================
+
+>> Role 적용 시 User, Group, Service account 구분 적용가능
+================================================
+(ex)
+subjects:
+- kind: User
+  name: [USER NAME]
+  apiGroup: rbac.authorization.k8s.io
+- kind: Group
+  name: [GROUP NAME]
+  apiGroup: rbac.authorization.k8s.io
+- kind: ServiceAccount
+  name: [SERVICE ACCOUNT NAME]
+================================================
+
+kubectl create rolebinding pod-read-role-to-pod-reader --role=pod-read-role --serviceaccount=pod-reader --namespace=default
+
+##Node
+
+1. Node NotReady 상태
+ - kubelet: node 내 실제 컨테이너를 수행하는 역할 > proccess 동작이 정상적이지 않을 때 "NotReady"
+================================================================
+kubectl get node #node 상태 조회 > NotReady 상태 node로 접근(ssh)
+
+systemctl status kubelet    #kubelet 상태 조회
+
+systmectl restart kubelet   #kubelet 재시작
+systmectl status kubelet    #kubelet 재확인
+
+kubectl get node            #node 상태 재확인
+================================================================
+
+2. Taint & Toleration
+ - Scheduler: 새로 생성된 pod 중 아직 node에 할당되지 않은 pod들을 찾아내고, 해당 pod가 실행될 최적의 node를 찾는 역할
+ - kube-scheduler: 한 pod를 배포할때 cpu, memory, affinity, taint and Toleration, priority, pv 등과 같은 pod 요구 사항을 지정
+ - taint: node가 pod 셋을 제외하도록 함 > 설정한 node는 파드를 스케쥴링 하지 않음
+ = toleration: taint가 설정한 node에 pod들을 스케쥴링 > 해당 node는 다른 pod들은 실행되지 않음 
+   >> node를 특정 역할만 하도록 만들 때 사용
+
+========================================================
+#taint 조회
+kubectl describe nodes | grep -i taint
+#노드 갯수를 파일 형태로 저장
+echo {노드갯수} > {파일경로}    
+========================================================
