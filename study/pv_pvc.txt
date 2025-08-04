@@ -1,0 +1,179 @@
+##PV, PVC
+
+#hostPath PV 생성
+
+1. hostPath.yaml 생성
+    =========================================
+    apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+    name: task-pv-volume
+    labels:
+        type: local
+    spec:
+    storageClassName: manual
+    capacity:
+        storage: 10Gi
+    accessModes:
+        - ReadWriteOnce
+    hostPath:
+        path: "{문제에서주어지는경로}"
+    =========================================
+
+2. PV 생성
+    kubectl create -f hostpath.yaml
+
+
+#PV-PVC 생성 nginx에 volumeMount
+
+1. PV생성
+    pv.yaml
+    =========================================
+    apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: task-pv-volume
+      labels:
+        type: local
+    spec:
+      capacity:
+        storage: 10Gi
+      accessModes:
+        - ReadWriteOnce
+      hostPath:
+        path: "/mnt/data"
+    =========================================
+    kubectl apply -f pv.yaml
+
+    #생성 확인
+    kubectl get pv
+
+2. PVC 생성
+    pvc.yaml
+    =========================================
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: task-pv-claim
+    spec:
+      accessModes:
+        - ReadWriteOnce     #pv.yaml 동일
+      resources:
+        requests:
+          storage: 3Gi      #pv 중 사용할 volume size
+    =========================================
+    kubectl apply -f pvc.yaml
+
+    #pv, pvc 생성 확인
+    kubectl get pv,pvc
+      > status 'Bound' 확인
+
+3. pod 생성 및 pvc 연결
+    pod.yaml
+    ===============================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: task-pv-pod
+    spec:
+      containers:
+        - name: task-pv-container
+          image: nginx
+          ports:
+            - containerPort: 80
+              name: "http-server"
+          volumeMounts:
+            - mountPath: "/usr/share/nginx/html"    #nginx container mount 경로
+              name: task-pv-storage                 #volumes의 name 동일
+      volumes:
+        - name: task-pv-storage
+          persistentVolumeClaim:
+            claimName: task-pv-claim                #pv명
+    ===============================================
+    kubectl apply -f pod.yaml
+
+    #생성 pod 확인
+    kubectl get pod
+
+    #pod mount 확인
+    kubectl describe pod task-pv-pod
+
+
+##Dynamic Provisioning(출처: https://gngsn.tistory.com/293)
+쿠버네티스는 PV의 동적 프로비저닝(Dynamic Provisioning)을 지원합니다.
+덕분에 이 일련의 작업을 자동으로 수행할 수 있습니다.관리자가 PV를 생성하는 대신 PV 프로비저너(Provisioner)를 배포하고,
+ 사용자가 선택 가능한 PV 타입을 하나 이상의 Storage Class(SC) 객체로 정의할 수 있습니다.
+ 
+사용자가 PVC에서 PV가 아닌 StorageClass를 참조하면,
+Provisioner가 퍼시스턴트 스토리지를 프로비저닝할 때 이를 자동으로 처리합니다.
+ 
+사실 대부분의 클라우드에서 Provisioner를 포함하는데,
+덕분에 PVC에서 StorageClass만 정의하면 클레임 요청시 시스템이 알아서 PV를 생성합니다.
+ 
+이제 PV를 직접 생성할 필요가 없습니다. 
+StorageClass에 의해 자동으로 생성됩니다.
+
+#storageClass에 해당하는 PVC 생성
+1. storageClass 상세 정보 확인
+    kubectl describe storageClass {storageClassName}
+
+2. pvc.yaml 생성
+    ================================================
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: myclaim
+    spec:
+      accessModes:
+        - {스토리지클래스와동일하게작성}
+      volumeMode: Filesystem
+      resources:
+        requests:
+          storage: {문제에서요구하는용량}
+      storageClassName: {문제에서주어진스토리지클래스}
+    ================================================
+
+    #생성 확인
+    kubectl get pv,pvc --all-namespaces
+        >PV 생성 확인
+    
+#멀티 컨테이너(siedecar-log_container 생성)
+1. 기존 pod 정보 추출 후 pod 삭제
+    kubectl get pod {파드명} -o yaml > nginx.yaml
+    kubectl delete pod {파드명}
+
+2. yaml 수정
+    vi nginx.yaml
+    ================================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: two-containers
+    spec:
+      volumes:
+      - name: shared-data
+        emptyDir: {}
+      containers:
+      - name: nginx-container
+        image: nginx
+        volumeMounts:
+        - name: shared-data
+          mountPath: var/log/nginx
+      - name: log-container
+        image: centos
+        command: ["/bin/sh"]
+        args: ["-c", "while true; do ls log; sleep 5;done"]
+        volumeMounts:
+        - name: shared-data
+          mountPath: log
+    ================================================
+    kubectl apply -f nginx.yaml
+
+    #pod 확인
+    kubectl get pod
+
+    #nginx log 생성 확인
+    kubectl logs two-container -c log-container
+     > access.log, error.log 생성 확인
+
+
