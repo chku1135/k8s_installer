@@ -1,0 +1,96 @@
+## 네트워킹
+
+#deployment expose
+#service yaml 생성 or expose 실행
+
+kubectl expose deployment hello-world --type=NodePort --name=example-service
+
+
+#Ingress 생성
+========================================================
+# 템플릿
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minimal-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - http:
+      paths:
+      - path: {문제에서주어지는경로}
+        pathType: Prefix
+        backend:
+          service:
+            name: {문제에서주어지는서비스명}
+            port:
+              number: {문제에서주어지는포트}
+
+# [작성 예시]
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minimal-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /shop                 #nginx_url{도메인} + /shop
+        pathType: Prefix
+        backend:
+          service:
+            name: shopservice       #shopservice로 전달
+            port:
+              number: 80
+      - path: /login                #nginx_url{도메인} + /login
+        pathType: Prefix
+        backend:
+          service:
+            name: loginservice      #loginservice로 전달
+            port:
+              number: 80
+========================================================
+
+
+#network policy
+(문) 특정 네임스페이스(myns) 특정 포트(80) 특정 파드(mypod)
+     > Ingress 트래픽을 허용
+     > 네임스페이스, 파드에 레이블 추가 > NetworkPolicy 생성
+
+#정책 적용할 파드 레이블링
+kubectl label pods mypod role=app
+
+#적책 적용할 네임스페이스 레이블링
+kubectl label namespace myns node=accept
+
+#적용 확인
+cat networkpolicy.yaml
+==========================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-network-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      role: app  #<- 문제 대상 파드에 동일한 레이블이 있어야 합니다.
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          node: accept  #<- 문제 대상 노드에 동일한 레이블이 있어야 합니다.
+    ports:
+    - protocol: TCP
+      port: 80
+==========================================================
+
+kubectl apply -f networkpolicy.yaml
+ > mypod: node=accept 레이블을 가진, myns 네임스페이스에서 80 port로 접근하는 트랙픽만을 허용
+ > 무분별한 트래픽 교환을 방지, 보안성이 뛰어난 서비스 운영가능
+
