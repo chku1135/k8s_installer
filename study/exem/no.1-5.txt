@@ -1,0 +1,211 @@
+##기출자료(https://www.itexams.com/exam/CKA/1)
+
+
+1.
+[kubectl config use-context k8s]
+
+Context
+You have been asked to create a new ClusterRole for a deployment pipeline and bind it to a specific ServiceAccount scoped to a specific namespace.
+
+Task
+Create a new ClusterRole named deployment-clusterrole, which only allows to create the following resource types:
+✑ Deployment
+✑ Stateful Set
+✑ DaemonSet
+Create a new ServiceAccount named cicd-token in the existing namespace app-team1.
+Bind the new ClusterRole deployment-clusterrole to the new ServiceAccount cicd-token, limited to the namespace app-team1.
+
+
+기존 네임스페이스 app-team1에 cicd-token이라는 새 ServiceAccount를 생성합니다. 새 ClusterRole인 deployment-clusterrole을 새 ServiceAccount인 cicd-token에 바인딩하고, 네임스페이스 app-team1로 제한합니다.
+
+- ClusterRole: deployment-clusterrole 생성 > ServiceAccount 바이딩
+- resource : ✑ Deployment ✑ Stateful Set ✑ DaemonSet
+- app-team1 네임스페이스로 제한 'cicd-token' ServiceAccount 생성
+
+답:
+#k8s context로 변경(kubernetes 클러스터와 상호작용할지 결정)
+kubectl config use-context k8s
+
+#clusterrole 생성
+kubeclt create clusterrole deployment-clusterrole --verb=create --resource=Deployment,StatefulSet,DaemonSet
+
+#ServiceAccount 생성(name, namespace 지정)
+kubectl create sa cicd-token --namespace app-team1
+
+#clubsterrolebinding deploy
+kubectl create deploy-b --clubsterrole=deployment-clusterrol --ServiceAccount=app-team1:cicd-token
+
+
+2.
+[kubectl config use-context ek8s]
+Task
+Set the node named ek8s-node-0 as unavailable and reschedule all the pods running on it.
+
+ - ek8s-node-0 > unavailable 후 reschedule 상태로 전환
+
+답: 
+kubectl config use-context ek8s
+
+#노드 확인
+kubelctl get nodes
+
+#ek8s-node-0 drain(unavailable 상태)
+kubectl drain ek8s-node-0 --ignore-deamonsets
+ ...
+ ek8s-node-0 drained(확인)
+
+#ek8s-node-0 status 확인
+kubcelt get nodes
+> ek8s-node-0 status > SechedulingDisabled 확인
+
+
+3. 
+[kubectl config use-context mk8s]
+
+Task
+Given an existing Kubernetes cluster running version 1.22.1, upgrade all of the Kubernetes control plane and node components on the master node only to
+version 1.22.2.
+Be sure to drain the master node before upgrading it and uncordon it after the upgrade.
+
+[ssh mk8s-master-0]
+
+[sudo-i]
+
+You are also expected to upgrade kubelet and kubectl on the master node.
+
+[Do not upgrade the worker nodes, etcd, the container manager, the CNI plugin, the DNS service or any other addons.]
+
+ - master node version upgrade(1.22.1 > 1.22.2)
+ - master node control plane, node components 포함
+ - ssh 접근 시 ssh mk8s-master-0
+ - root 권한 sudo-i
+ - kubelet, kubectl 포함 upgrade. but worker node는 진행하면 안됨
+
+답:
+kubectl config use-context mk8s
+
+#master node 확인
+kubectl get node
+
+#master node drain 
+kubectl drain mk8s-master-0 --ignore-deamonsets
+
+#master node drain 확인
+kubectl get node
+
+#master node ssh 접근
+ssh mk8s-master-0
+
+#upgrade kubeadm,kubectl,kubelet
+sudo -i
+apt get update
+apt install kubeadm=1.22.2-00 kubelet=1.22.2-00 kubectl=1.22.2-00
+
+#version 확인
+kubeadm version
+
+#upgreade plan 확인
+kubeadm upgrade plan
+
+#upgrade 적용
+sudo kubeadm upgrade apply v1.22.2
+
+#kubelet restart
+systemdtl restart kubelet
+
+exit
+
+#master node uncordon
+kubectl get nodes
+kubectl uncordon mk8s-master-o
+
+#upgrade version 확인
+kubectl get nodes
+ > master node version 확인(1.22.2 확인)
+
+4.
+[exit]
+Task
+First, create a snapshot of the existing etcd instance running at https://127.0.0.1:2379,
+saving the snapshot to /var/lib/backup/etcd-snapshot.db.
+
+The Following TLS certificates/key supplied for connecting to the server with etcdctl:
+ * CA certificate: /opt/KUIN00601/ca.crt
+ * Client cetitiate /opt/KUIN00601/etcd-client.crt
+ * Client key: /opt/KUIN00601/etcd-client.key
+
+ Creating a snapshot of the given instance is expected to complete in seconds. If the operation seems to hang something's likely wrong with your command. Use CTRL+C to cancel the operation and try again.
+
+ Next, restore an existing, previous snapshot located at /var/lib/backup/etcd-snapshot-previous.db.
+
+ - /var/lib/backup/etcd-snapshot.db 경로 etcd snapshot save
+ - endpoint : https://127.0.0.1:2379
+ - snapshot 후 이전 snapshot(/var/lib/backup/etcd-snapshot-previous.db) restore 진행
+
+답: 
+#etcd snapshot save 
+ETCDCTL_API=3 etcdctl --endpoints https://127.0.0.1:2379 \
+  --cert=/opt/KUIN00601/etcd-client.crt \
+  --key=/opt/KUIN00601/etcd-client.key \
+  --cacert=/opt/KUIN00601/ca.crt \
+  save /var/lib/backup/etcd-snapshot.db
+
+#etcd snapshot status(확인)
+ETCDCTL_API=3 etcdctl --endpoints https://127.0.0.1:2379 \
+  --cert=/opt/KUIN00601/etcd-client.crt \
+  --key=/opt/KUIN00601/etcd-client.key \
+  --cacert=/opt/KUIN00601/ca.crt \
+  status /var/lib/backup/etcd-snapshot.db
+
+#etcd 기존(이전)snapshot restore
+systemctl stop etcd.service
+ETCDCTL_API=3 etcdctl restore /var/lib/backup/etcd-snapshot-previous.db
+systemctl restart etcd.service
+
+5. (추가 study 필요)
+[kubectl config use-context hk8s]
+Task
+Create a new NetworkPolicy named allow-port-from-namespace in the existing
+namespace fubar.
+Ensure that the new NetworkPolicy allows Pods in namespace internal to connect to port 9000 of Pods in namespace fubar.
+Further ensure that the new NetworkPolicy:
+✑ does not allow access to Pods, which don't listen on port 9000
+✑ does not allow access from Pods, which are not in namespace internal
+
+ - 기존 네임스페이스 fubar에 allow-port-from-namespace라는 이름의 NetworkPolicy 생성 > port 9000 연결할 수 있도록 설정
+
+또한 새 네트워크 정책이 다음을 충족하는지 확인합니다.
+✑ 포트 9000에서 수신 대기하지 않는 Pod에 대한 액세스를 허용하지 않습니다.
+✑ internal 네임스페이스에 없는 Pod의 액세스를 허용하지 않습니다.
+
+답:
+kubectl config use-context hk8s
+
+#policy.yaml 존재??
+vim policy.yaml
+=================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metatdata:
+  name: allow-port-from-namespace   #지정된 networkPolicy명
+  namesapce: fubar                  #지정된 ns명
+sepc:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+      - namespaceSelector:
+        matchLabels:
+          project: my-app
+      ports:
+        - protocol: TCP
+          port: 9000                #지정된 port
+=================================================
+
+#fubar에 label 추가(project=my-app) 
+kubectl label ns fubar project=my-app
+
+kubectl describe ns fubar
+
+kubectl create -f policy.yaml
