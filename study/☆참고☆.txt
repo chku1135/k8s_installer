@@ -1,1 +1,6 @@
 #참고 사이트: https://daintree.tistory.com/16
+
+##k8s 명령어 정리
+#참고 : https://kubernetes.io/ko/docs/reference/kubectl/cheatsheet/
+
+#참고(정리자료) : https://imprint.tistory.com/573
