@@ -1,0 +1,158 @@
+##기출자료(https://www.itexams.com/exam/CKA/1)
+
+
+6. 
+[kubectl config use-context k8s]
+
+Task
+Reconfigure the existing deployment front-end and add a port specification named http
+exposing port 80/tcp of the existing container nginx.
+Create a new service named front-end-svc exposing the container port http.
+Configure the new service to also expose the individual Pods via a NodePort on the nodes on which they are scheduled.
+
+- 배포된 'front-end' 옵션 수정 > 'http' 이름의 port 옵션 추가
+- 기존 container 'nginx' > port:80, protocol: TCP로 노출
+- 'front-end-svc'이름으로 service 노출, nodeport
+
+답:
+kubectl config use-context k8s
+
+#deployment 조회
+kubectl get deployment
+or kubectl get deployment.apps
+
+#front-end deployment 수정
+kubectl edit deployment front-end 
+or kubectl edit deployment.apps front-end 
+
+==================================
+...
+  containers:
+  - images: nginx:1.14.2
+    imagePullPolicy: IfNotPresent
+    name: nginx
+    ports:        #port : 80 / name: http로 추가
+    - containerPort: 80
+      name: http 
+...
+==================================
+wq!
+
+#front-end service expose
+kubectl expose deployment front-end --name=front-end-svc --port=80 --type=NodePort --protocol=TCP
+
+#service 확인
+kubectl describe svc front-end-svc
+
+
+7.
+[kubectl config use-context k8s]
+
+Task
+Scale the deployment presentation to 3 pods.
+-기존 deployment 'presentation'을 replicas: 3으로 변경
+
+답:
+#deployment 확인
+kubectl get deployment
+
+#replicas 수량 변경
+kubectl scale deployment presentation --replicas=3
+
+#적용 확인
+kubectl get deployment
+
+
+8.
+[kubectl config use-context k8s]
+
+Task
+Schedule a pod as follows:
+✑ Name: nginx-kusc00401
+✑ Image: nginx
+✑ Node selector: disk=ssd
+
+- 상기 내용의 pod 배포
+
+답:
+#nginx.yaml 생성
+kubectl run nginx --name=nginx-kusc00401 --image=nginx --dry-run -o yaml > nginx.yaml
+or 
+kubectl run nginx --name=nginx-kusc00401 --image=nginx --disktype=ssd --dry-run -o yaml > nginx.yaml
+
+vi nginx.yaml
+===============================
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx-kusc00401
+  name: nginx-kusc00401
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+  nodeSelector:
+    disk: ssd
+===============================
+
+#nginx.yaml pod 배포
+kubectl create -f nginx.yaml
+
+#확인
+kubectl get pods -o wide | grep kusc00401
+
+9.
+[kubectl config use-context k8s]
+
+Task
+Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
+
+- ready 상태 node 개수 /opt/KUSC00402/kusc00402.txt 경로에 입력
+- 단, NoSchedule된(drain) node는 제외
+
+답:
+
+#node status 확인(master node는 제외) 
+kubectl get nodes
+
+echo "2" > /opt/KUSC00402/kusc00402.txt
+cat /opt/KUSC00402/kusc00402.txt
+
+10.
+[kubectl config use-context k8s]
+
+Task
+Schedule a Pod as follows:
+✑ Name: kucc8
+✑ App Containers: 2
+✑ Container Name/Images:
+- nginx
+- consul
+
+- kucc8 pod에 nginx, consul container 배포
+
+답:
+kubectl run nginx --name=kucc8 --image=nginx --dry-run -o yaml > nginx2.yaml
+
+vi nginx2.yaml
+==============================
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: kucc8
+  name: kucc8
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+  - image: consul
+    name: consul
+==============================
+
+kubectl create -f nginx2.yaml
+kubeclt get pods -o wide
+
