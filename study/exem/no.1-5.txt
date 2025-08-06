@@ -162,6 +162,9 @@ systemctl stop etcd.service
 ETCDCTL_API=3 etcdctl restore /var/lib/backup/etcd-snapshot-previous.db
 systemctl restart etcd.service
 
+-- 생성 확인방법
+ETCDCTL_API=3 etcdctl --write-out=table snapshot status /snapshot/etcd.db 
+
 5. (추가 study 필요)
 [kubectl config use-context hk8s]
 Task
