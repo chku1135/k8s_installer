@@ -1,0 +1,68 @@
+pipeline {
+    agent any
+    
+    environment {
+        GIT_URL = "https://github.com/ZZmarkus/Jenkins_Test.git"        ##gitlab or github 주소
+    }
+
+    stages {
+        stage('Pull') {
+            steps {
+                git url: "${GIT_URL}", branch: "main", poll: true, changelog: true
+            }
+        }
+        
+        stage('Setup') {
+            steps {
+                sh 'chmod +x gradlew'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    def commitHash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    def imageTag = "jbc21c/hello:second-${commitHash}"
+        
+                    sh 'pwd'
+                    sh './gradlew build'
+                    sh 'ls build/libs'
+                    sh "docker build --no-cache -t ${imageTag} ."
+                }
+            }
+        }
+        
+        stage('Push to DockerHub') {
+            steps {
+                script {
+                    def commitHash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    def imageTag = "jbc21c/hello:second-${commitHash}"
+        
+                    withCredentials([usernamePassword(credentialsId: 'DockerHub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                        sh "docker push ${imageTag}"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    def commitHash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    def imageTag = "jbc21c/hello:second-${commitHash}"
+        
+                    sh 'kubectl apply -f deployment.yaml'
+                    sh "kubectl set image deployment/hello-deployment hello=${imageTag} --record"
+                }
+            }
+        }
+
+       stage('Finish') {
+            steps{
+                echo 'Build and deploy complete.'
+                sh 'docker images -qf dangling=true | xargs -I{} docker rmi {}'
+            }
+        }
+    }
+}
