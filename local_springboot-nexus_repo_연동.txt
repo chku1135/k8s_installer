@@ -1,0 +1,57 @@
+#local springboot-nexus_repo 연동
+#참고 : https://waspro.tistory.com/510
+
+#settings.xml 수정
+경로 : c:\User\user\.m2
+
+====================================================================
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.1.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.1.0 http://maven.apache.org/xsd/settings-1.1.0.xsd">
+
+  <servers>
+    <server>
+      <id>nexus-snapshots</id>
+      <username>admin</username>
+      <password>admin123</password>
+    </server>
+    <server>
+      <id>nexus-releases</id>
+      <username>admin</username>
+      <password>admin123</password>
+    </server>
+  </servers>
+
+  <mirrors>
+    <mirror>
+      <id>central</id>
+      <name>central</name>
+      <url>https://repo.maven.apache.org/maven2</url>
+      #넥서스 경로로 변경 <url>http://222.234.124.6:8081/nexus/content/repositories/thirdparty/</url>
+      <mirrorOf>*</mirrorOf>
+    </mirror>
+  </mirrors>
+
+</settings>
+====================================================================
+
+
+#springboot > pom.xml 수정
+====================================================================
+	<repositories>
+		<repository>
+			<id>public</id>
+			<url>http://222.234.124.6:8081/nexus/content/repositories/thirdparty/</url>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</repository>
+	</repositories>
+====================================================================
+
+#springboot maven install
+> pom.xml 우클릭 → Run As → Maven Install
