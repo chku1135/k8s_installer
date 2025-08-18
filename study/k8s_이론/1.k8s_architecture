@@ -1,0 +1,473 @@
+#k8s 이론 정리
+# 참고 사이트: https://sjw1995628.tistory.com/17
+
+##쿠버네티스 아키텍처
+ - 쿠버네티스의 주요 아키텍처는 컨트롤 플레인과 워크노드로 나뉜다.
+
+1. 컨트롤 플레인(Control Plane)
+- 클러스터의 상태를 관리, 워크로드 조정, 클러스터가 원하는 상태를 유지하도록 보장 
+
+    1-1. kube-apiserver
+    - 쿠버네티스 API를 제공하는 중심 관리 컴포넌트
+    - 외부 사용자, 관리자, 내부 구성요스가 클러스터와 상호작용
+    - 모든 요청은 이 API 서버를 통해 처리
+
+    1-2. etcd: 
+    - 클러스터 데이터를 저장하는 일관적, 고가용성의 키-값 저장소 
+    - 노드, 포드, 설정 정보 등 클러스터 상태와 관련된 모든 데이터 저장 
+
+    1-3. kube-scheduler:
+    - 새로 생성된 pod를 적절한 워커노드에 할당
+    - 리소스 요구사항, 제약조건(taints/tolerations, 노드 선호도 등)을 기반으로 최적의 노드를 선택
+
+    1-4. kube-controller-manager:
+    - 여러 컨트롤러를 실행하여 클러스터의 상태를 모니터링하고 원하는 상태로 유지
+    - 노드 컨트롤러(노드 상태 관리), 복제 컨트롤러(지정된 포드 복제 수 유지), 엔드포인트 컨트롤러(서비스 엔드 포인트 관리)
+
+2. 워커 노드(Worker Nodes)
+- 실제 어플리케이션이 실행되는 곳으로 포드를 호스팅
+
+    2-1. kubelet:
+    - 각 워커 노드에서 실행되는 에이전트로, kube-apiserver와 통신하여 포드를 생성 및 관리
+    - 포드 사양(PodSpec)을 읽고 컨테이너가 올바르게 실행되도록 보장
+    - 주기적으로 컨테이너와 노드 상태 보고 
+
+    2-2. kube-proxy
+    - 네트워크 프록시 역할을 하며, 서비스 간 통신을 가능하게 한다. 
+    - 네트워크 규칙을 설정하여 포드 간, 서비스 간 트래픽이 올바르게 라우팅 보장 
+
+    2-3. 컨테이너 런타임 엔진
+    - 컨테이너를 실행하는 소프트웨어로, Docker, Containerd, CRI-O등이 사용 
+
+3. 주요 작동 흐름 
+
+    3-1. 사용자는 kubectl 명령어 또는 API를 통해 kube-apiserver에 요청을 보냄
+    3-2. kube-apiserver는 요청을 검증하고 etcd에 데이터를 업데이트하여 원하는 상태를 저장 
+    3-3. kube-scheduler는 새 pod를 적절한 워커 노드에 할당
+    3-4. kube-controller-manager는 클러스터 상태를 모니터링하고 필요한 조치를 취해 원하는 상태를 유지
+    3-5. kubelet은 kube-apiserver의 지시에 따라 컨테이너를 시작하거나 중지하며 상태를 보고
+    3-6. kube-proxy는 네트워크 통신 규칙을 설정하여 포드간 연결 지원
+
+ 
+##Docker, Containerd, ctr nerdctl,crictl
+
+1. 초기 컨테이너 시대와 도커의 등장
+
+    1-1. 도커는 초기 컨테이너 시대에 사용자 경험을 단순화하여 가장 널리 사용된 도구
+
+    1-2. 초기 쿠버네티스는 도커만 지원하며, 도커와 긴밀히 통합되어 작동 
+
+2. 컨테이너 런타임 인터페이스 도입
+
+    2-1. 쿠버네티스가 성장하면서 다른 컨테이너 런타임(rkt)를 지원하기 위해 CRI 도입
+    - CRI는 OCI(Open Container Initiative) 표준(이미지 사양 및 런타임 사양)을 준수하는 모든 컨테이너 런타임을 지원하도록 설계 
+
+    2-2. 도커와 CRI의 호환성 문제
+    - 도커는 CRI 표준 이전에 개발되어 CRI를 지원하지 않음
+    - 이를 해결하기 위해 쿠버네티스는 임시로 Dockershim이라는 중간 계층을 추가하여 도커를 계속 지원
+    - Dockershim은 유지보수 부담 및 복잡성으로 인해 쿠버네티스 1.24 이후로 중단
+    - 이후 기존 도커 이미지들은 OCI 표준을 따르기 때문에 containerd를 통해 계속 사용되었음
+
+
+##Containerd의 독립성과 역할
+
+    - Containerd는 원래 도커의 일부였으나 현재는 독립적인 CNCF 프로젝트로 발전
+    - Containerd는 CRI 표준을 준수하며, 쿠버네티스와 직접 통합가능
+    - Docker없이도 Containerd를 설치하고 사용 가능
+
+
+##주요 CLI 도구
+
+1. CTR 
+
+    1-1. Containerd에 포함된 기본 CLI 도구로, 디버깅 목적으로 설계됨
+    1-2. 기능이 제한적이며, 프로덕션 환경에서 사용하기에 부적합
+
+2. nerdctl
+
+    2-1. 도커와 유사한 CLI로 Containerd 커뮤니티에서 개발
+    2-2. 도커 명령어와 유사한 방식으로 작동하며, 추가기능(암호화된 이미지,P2P 이미지 배포,lazy pulling)등을 제공
+    2-3. 도커 대체용 (Crictl)
+    - Kubernetes 커뮤니티에서 개발한 CLI로, 모든 CRI 호환 컨테이너 런타임과 상호작용 가능
+    - 주로 디버깅 및 상태 점검 목적으로 사용되며, 프로덕션 환경에서 컨테이너 생성에는 적합하지 않음 
+    - kubelet과 연동되어 노드 및 포드 상태를 확인하는 디버깅 목적으로 주로 사용됨 
+
+##ETCD
+
+1. ETCD란 무엇인가
+
+    1-1. ETCD는 분산형, 신뢰할 수 있는 Key-Value 저장소로, 간단하고 안전하며 빠름 
+    - Key-Value 저장소로 각 문서, 데이터를 독립적으로 관리하며, JSON,YAML과 같은 데이터 형식을 사용하여 복잡한 데이터를 처리한다. 
+    - 분산 시스템으로 고가용성을 보장한다.
+
+2. ETCD의 주요기능
+
+    2-1. 클러스터의 상태정보 저장
+    - Kubernetes의 노드, Pods, Configs, Secrets, Accounts, Roles 등 클러스터 메타데이터를 관리
+    - 'kubectl get' 명령어로 확인 가능한 모든 클러스터 메타데이터를 관리 
+
+    2-2. 변경 사항 반영 
+    - 클러스터 변경(노드추가, 포드 배포 등)은 ETCD에 업데이트된 후에야 완료로 간주 
+
+    
+3. ETCD 설치 및 작동 
+    3-1. 설치:
+    - Github releases 에서 바이너를 다운로드하고 압축 해제 후 실행
+    wget -q --https-only \"https://github.com/coreos/etcd/releases/download/v3.3.9/etcd-v3.3.9-linux-amd64.tar.gz"
+    - 기본적으로 포드 2379에서 서비스가 실행됨
+
+    3-2. 작동
+    - ETCDCTL 클라이언트를 사용하여 Key-Value쌍을 저장하고 검색 가능 
+    [etcd-master에 키만 가져오도록 명령어 실행]
+    kubectl exec etcd-master -n kube-system etcdctl get / --prefix -keys-only
+ 
+
+4. 다중 마스터 노드 ETCD 구성
+
+    4-1. 고가용성으로 여러 마스터노드에 걸쳐 다중 인스턴스를 배포하는 경우, 각 ETCD 인스턴스가 서로를 인식하도록 초기 클러스터 옵션을 설정해야함.
+    ==================================================================================
+    [etcd.service 내용]
+    ExecStart=/usr/local/bin/etcd \\
+        --name ${ETCD_NAME} \\
+        --cert-file=/etc/etcd/kubernetes.pem \\
+        --key-file=/etc/etcd/kubernetes-key.pem \\
+        --peer-cert-file=/etc/etcd/kubernetes.pem \\
+        --peer-key-file=/etc/etcd/kubernetes-key.pem \\
+        --trusted-ca-file=/etc/etcd/ca.pem \\
+        --peer-trusted-ca-file=/etc/etcd/ca.pem \\
+        --peer-client-cert-auth \\
+        --client-cert-auth \\
+        --initial-advertise-peer-urls https://${INTERNAL_IP}:2380 \\
+        --listen-peer-urls https://${INTERNAL_IP}:2380 \\
+        --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \\
+        --advertise-client-urls https://${INTERNAL_IP}:2379 \\
+        --initial-cluster-token etcd-cluster-0 \\
+        --initial-cluster controller-0=https://${CONTROLLER0_IP}:2380,controller-1=https://${CONTROLLER1_IP}:2380 \\
+        --initial-cluster-state new \\
+        --data-dir=/var/lib/etcd
+    ==================================================================================
+    --cert-file,--key-file: HTTPS 보안 통신을 위한 클라이언트 인증서와 키파일 그리고 CA파일을 지정할 수 있다. 
+    --peer-cert-file,--peer-key-file: 다중 클러스터 통신시 피어 ETCD간 인증을 위한 인증서와 키파일을 지정할 수 있다. 
+    --initial-advertise-peer-urls: 피어 노드 간 통신을 위한 URL을 지정(일반 ETCD 포트 2379가 아닌 2380으로 쓰인다.)
+    --listen-peer-urls: 피어 간 통신을 수신할 URL을 지정 
+    --listen-client-urls/--advertise-client-urls : 클라이언트 요청을 수신/광고할 URL을 지정 
+    --initial-cluster-state --initial-cluster: 클러스터의 상태(새로운 클러스터 생성 'new', 기존 클러스터 연결 'existing') 을 명시하고 클러스터의 모든 노드와 해당 URL 목록을 나열한다. 
+    --data-dir=var/lib/etcd : etcd데이터가 저장되는 디렉토리 경로로 장애복구시 백업 대상이 된다.
+
+
+
+##Kube-API Server
+
+1. 정의
+    - 쿠버네티스의 주요 관리 컴포넌트로 클러스터 내 모든 작업이 서버를 통해 이루어짐 
+    - 사용자가 kubectl 명령어를 실행하면, 해당 요청은 kube-apiserver로 전달
+    - kube-apiserver는 요청을 인증 및 검증한 후 데이터를 etcd에서 가져오거나 업데이트
+
+2. 주요 역할
+
+    2-1. 요청처리:
+    - 사용자의 요청을 인증하고 유효성을 확인 
+
+    2-2. 클러스터 데이터 관리:
+    - 클러스터 상태 정보(node,pod,config)를 저장하고 업데이트
+    - etcd와 직접 통신해서 정보를 파악하고 저장
+
+    2-3. 다른 컴포넌트와의 통신 
+    - kube-scheduler 및 kube-controller-manager가 API 서버를 통해 클러스터 상태를 업데이트
+    - 워커 노드의 kubelet과 통신하여 어플리케이션 배포 명령 전달 
+
+3. 작동 흐름
+
+    - 사용자가 Pod 생성 요청을 보냄(kubectl, api호출 등)
+    - kube-apiserver가 요청을 인증 및 검증
+    - Pod 객체를 생성하고 정보를 ETCD에 저장
+    - 스케줄러가 새로운 Pod를 감지하고 적절한 노드에 할당 
+    - 스케줄러가 노드정보를 kube-apiserver에 전달
+    - kube-apiserver가 해당 정보를 다시 etcd에 업데이트 
+    - 워커 노드의 kubelet이 Pod를 생성하고 컨테이너 런타임엔진(Docker,Containerd)을 통해 어플리케이션 이미지를 배포 
+
+4. Kube-API Server 설치 및 구성 
+
+    4-1. 설치
+    - kubeadm을 사용한 설치할 경우, kube-API Server를 포함한 컨트롤 플레인을 자동으로 설정할 수 있으며, 연관된 네트워크 대역을 설정할 수 도 있다. 
+    - Kubeadm은 kube-api server를 Pod로 배포하며, 관련 설정은 /etc/kubernetes/manifest/kube-apiserver.yaml에 저장된다.
+    - 바이너리를 직접 다운로드하여 설치를 할 수도 있다.  수동설치한뒤 /etc/systemd/system/kube-apiserver.service 에 서비스파일을 만들어야한다.
+
+    wget https://storage.googleapis.com/kubernetes-release/release/v1.31.0/bin/linux/amd64/kube-apiserver
+    chmod +x kube-apiserver
+    sudo mv kube-apiserver /usr/local/bin/
+
+    [서비스 파일 내용은 해당 디렉토리에서 확인할 수 있다.]
+    sudo vi /etc/systemd/system/kube-apiserver.service
+
+    [구성파일 예시]
+    =======================================================================
+    [Unit]
+    Description=Kubernetes API Server
+    Documentation=https://kubernetes.io/docs/
+    After=network.target
+
+    [Service]
+    ExecStart=/usr/local/bin/kube-apiserver \
+        --advertise-address=192.168.1.100 \
+        --allow-privileged=true \
+        --authorization-mode=Node,RBAC \
+        --client-ca-file=/var/lib/kubernetes/ca.pem \
+        --etcd-cafile=/var/lib/kubernetes/ca.pem \
+        --etcd-certfile=/var/lib/kubernetes/apiserver-etcd-client.pem \
+        --etcd-keyfile=/var/lib/kubernetes/apiserver-etcd-client-key.pem \
+        --etcd-servers=https://127.0.0.1:2379 \
+        --service-cluster-ip-range=10.96.0.0/12 \
+        --tls-cert-file=/var/lib/kubernetes/apiserver.pem \
+        --tls-private-key-file=/var/lib/kubernetes/apiserver-key.pem
+
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    =======================================================================
+
+    4-2. api서버 주요 요소
+    - 인증 및 보안 : --client-ca-file, ---etcd-certfile, --etcd-keyfile 등을 통해 클라이언트, 인증서를 검증하기 위한 ca 인증서 키 경로를 설정할 수 있으며, --authoriztion-mode를 통해 권한 부여 방식을 설정할 수 있다.
+    - 네트워크 설정: `--advertise-address` API 서버가 광고할 IP 주소, `--bind-address` API 서버가 수신할 IP 주소, `--service-cluser-ip-range` 클러스터 내 서비스의 IP범위 설정을 명시할 수 있다.
+
+    4-3. 실행 및 확인 명령어
+    [kubeadm으로 배포된 경우 확인 명령어]
+    kubectl get pods -n kube-system | grep kube-apiserver
+    --출력--
+    kube-system   kube-apiserver-master   1/1     Running   0          5m
+
+    [수동 설치된 경우 실행 및 확인 명령어]
+    sudo systemctl start kube-apiserver.service
+    sudo systemctl status kube-apiserver.service
+    --출력--
+    ● kube-apiserver.service - Kubernetes API Server
+    Loaded: loaded (/etc/systemd/system/kube-apiserver.service; enabled; vendor preset: enabled)
+    Active: active (running) since Mon 2024-12-09 12:00:00 KST; 5min ago
+        Docs: https://kubernetes.io/docs/
+    Main PID: 12345 (kube-apiserver)
+        Tasks: 8 (limit: 4915)
+    Memory: 512M CPU: 10%
+    CGroup: /system.slice/kube-apiserver.service
+            └─12345 /usr/local/bin/kube-apiserver ...
+
+
+
+##Kube Controller Manager
+
+1. 정의
+- Kubernetes 클러스터에서 다양한 컨트롤러를 실행하고 관리하는 프로세스
+- 컨트롤러: 클러스터의 상태를 지속적으로 감시하고 사용자가 정의한 원하는 상태와 현재 상태를 비교하여 필요한 조치를 취함
+- 클러스터의 안정성과 신뢰성을 유지하며 쿠버네티스의 핵심 기능을 구현 
+
+ 
+
+2. 주요역할
+- 여러 컨트롤러를 통합 관리하며, 각 컨트롤러는 특정 작업을 담당 
+
+    2-1. Node Controller 
+    - 노드 상태를 감시하고 문제가 발생한 노드에 대해 조치를 취함
+    - (ex) 노드가 40초동안 응답하지 않으면 Unreachable로 표시하고 5분 후에도 복구되지 않으면 해당 노드의 Pod를 다른 노드로 이동
+
+    2-2. Replication Controller
+    - 지정된 Pod 복제수를 유지
+    - Pod가 삭제되거나 실패하면 새로운 Pod를 생성하여 복제 수를 유지 
+
+    2-3. Deployment Controller
+    - 어플리케이션 배포 및 롤링 업데이트를 관리
+    - 새로운 버전의 어플리케이션을 배포하거나 이전 버전으로 롤백
+
+    2-4. Namespace Controller
+    - 네임스페이스 생성 및 삭제 관리
+
+    2-5. PersistentVolume Controller 
+    - PersistentVolume과 PersistentVolumeClaim의 바인딩 및 관리를 담당
+
+    2-6. Job 및 CronJob Controller
+    - Job과 CronJob 오브젝트를 관리하여 작업이 올바르게 실행되도록 보장 
+
+    2-7. StatefulSet및 DaemonSet Controller
+    - StatefulSet: 상태가 필요한 어플리케이션(Pod)에 대해 고유한 식별자와 스토리지를 제공
+    - DaemonSet: 모든 노드에서 특정 Pod가 실행되도록 보장 
+
+ 
+
+3. 작동방식
+- Kube Controller Manager는 API 서버를 통해 클러스터 상태를 감시하고 조치를 취함
+
+    3-1 Yaml manifest 파일로 원하는 상태를 정의하고 오브젝트(Pod 등)배포 
+
+    3-2. API서버가 오브젝트를 생성하고 etcd에 저장
+
+    3-3. Kube Controller Manager의 각 컨트롤러가 해당 오브젝트를 감시
+
+    3-4. 현재 상태와 원하는 상태 간의 차이를 확인하고 필요 작업 수행
+
+ 
+
+4. 설치 및 구성
+
+    4-1. 설치 및 확인방법
+    - kubeadm init으로 설치되면, 컨트롤러 플레인이 설치 되면서 kube controller manager등이 Pod 형태로 자동 배포된다.
+    - kubeadm을 사용한 설치의 경우, Kube Controller Manager를 Pod 형태로 자동 배포하며 관련 설정 파일은 /etc/kubernetes/manifests/kube-controller-manager.yaml에 저장
+    - kubectl get pods를 통해 확인이 가능하다.
+    [kube controller manager 확인]
+    kubectl get pods -n kube-system | grep kube-controller-manager
+    --출력--
+    kube-system   kube-controller-manager-master   1/1     Running   0          10m
+
+    [Pod 형태]
+    ===========================================================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+        name: kube-controller-manager
+        namespace: kube-system
+    spec:
+        containers:
+        - name: kube-controller-manager
+        image: k8s.gcr.io/kube-controller-manager:v1.31.0
+        command:
+            - kube-controller-manager
+            - --address=127.0.0.1
+            - --cluster-signing-cert-file=/etc/kubernetes/pki/ca.crt
+            - --cluster-signing-key-file=/etc/kubernetes/pki/ca.key
+            - --controllers=*,bootstrapsigner,tokencleaner
+            - --kubeconfig=/etc/kubernetes/controller-manager.conf
+            - --leader-elect=true
+            - --root-ca-file=/etc/kubernetes/pki/ca.crt
+            - --service-account-private-key-file=/etc/kubernetes/pki/sa.key
+            - --use-service-account-credentials=true
+    ===========================================================================
+
+    - 수동설치의 경우, 바이너리를 다운로드하여 직접 설치 가능하며 서비스 파일을 구성해야 한다.
+    [수동 설치]
+    wget https://storage.googleapis.com/kubernetes-release/release/v1.31.0/bin/linux/amd64/kube-controller-manager
+    chmod +x kube-controller-manager
+    sudo mv kube-controller-manager /usr/local/bin/
+
+    [서비스 구성]
+    ===========================================================================
+    [Unit]
+    Description=Kubernetes Controller Manager
+    Documentation=https://kubernetes.io/docs/
+    After=network.target
+
+    [Service]
+    ExecStart=/usr/local/bin/kube-controller-manager \
+        --address=0.0.0.0 \
+        --cluster-cidr=10.200.0.0/16 \
+        --cluster-name=kubernetes \
+        --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \
+        --cluster-signing-key-file=/var/lib/kubernetes/ca-key.pem \
+        --kubeconfig=/var/lib/kubernetes/kube-controller-manager.kubeconfig \
+        --leader-elect=true \
+        --root-ca-file=/var/lib/kubernetes/ca.pem \
+        --service-account-private-key-file=/var/lib/kubernetes/service-account-key.pem \
+        --service-cluster-ip-range=10.32.0.0/24 \
+        --use-service-account-credentials=true \
+        --v=2
+
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    ===========================================================================
+
+5. 구성요소
+
+    5-1. 인증 및 보안
+    --cluster-signing-cert-file, --cluster--signing-key-file: 인증서를 서명하는데 사용되는 CA인증서와 키 파일경로
+    --service-account-private-key-file: 서비스 계정 토큰 서명을 위한 개인 키 파일 경로 
+
+    5-2. 네트워크
+    --address: 컨트롤러 매니저가 요청을 수신할 IP 주소
+    --service-cluster-ip-range: 서비스 IP 범위 설정
+
+
+##Kube-Scheduler
+
+1. 정의
+- 클러스터에서 Pod를 적절한 노드에 배치하는 역할을 담당하는 컴포넌트
+
+    1-1. 역할
+    - Pod가 생성되면, kube-scheduler는 POd의 요구사항과 노드의 상태를 기반으로 가장 적합한 노드를 선택하고 Pod를 배치
+
+    1-2. 고려사항
+    -kube-scheduler는 Pod를 배치할 노드를 결정만 하며, 실제로 Pod를 노드에 배치하는 작업은 해당 노드의 kubelet이 수행합니다.
+
+2. 작동원리
+- 두가지 단계로 배치할 노드를 결정
+
+    2-1. 필터링 단계
+    - Pod의 요구사항을 만족하지 못하는 노드를 제외
+    - CPU/메모리 리소스를 지원하지 않는 노드 제외
+    - Taints/Tolerations 규칙에 맞지 않는 노드 제외 
+
+    2-2. 랭킹 단계
+    - 필터링된 노드 중에서 가장 적합한 노드를 선택
+    - 우선순위 함수를 사용하여 각 노드에 점수를 부여하고 가장 높은 점수를 받은 노드를 선택
+
+    2-3. 주요 스케줄링 기준
+    - 리소스 요구사항: CPU, 메모리 등 Pod의 리소스 요청과 제한
+    - Taints와 Tolerations: 특정 조건에서 Pod가 특정  노드에 배치되지 않도록 제어
+    - Node Selectors: 특정 레이블을 가진 노드에만 Pod를 배치
+    - Affinity/Anti-Affinity Rules: 특정 pod와 가까운 위치 또는 멀리 떨어진 위치에서 배치
+
+
+##kubelet
+
+1. 정의
+- 쿠버네티스 워커 노드에서 실행되는 에이전트로, 클러스터의 Pod와 컨테이너 관리를 담당
+
+    1-1. 역할
+    - 워크 노드를 쿠버네티스 클러스터에 등록
+    - API 서버로부터 받은 명령에 따라 Pod를 생성 및 관리 
+    - 컨테이너 런타임엔진(Docker, Containerd)을 호출하여 애플리케이션 이미지를 실행
+    - 주기적으로 Pod와 컨테이너 상태를 모니터링하고 이를 API 서버에 보고 
+
+    1-2. 주요 기능
+    - 노드 등록: kubelet은 노드를 클러스터에 등록하고 상태정보를 보고
+    - Pod 생성 및 관리: kube-scheduler가 선택한 노드에 Pod를 배치하도록 명령을 받으면 kubelet은 컨테이너 런타임엔진을 호출하여 Pod를 실행 
+    - 상태보고: Pod와 컨테이너의 상태를 지속적으로 감시, 이를 kube-apiserver에 보고하여 클러스터 상태를 유지  
+    - TLS 부트스트래핑: kubelet은 클러스터 보안을 위해 TLS 인증서를 생성하고 API 서버와 안전하게 통신
+
+ 
+
+##kube-proxy
+
+1. 정의
+- 쿠버네티스 클러스터에서 Pod와 서비스간의 네트워크 통신을 관리하는 네트워크 컴포넌트
+
+    1-1. 역할:
+    - 서비스와 연결된 Pod로 트래픽을 라우팅 
+    - 클러스터 내 모든 노드에서 실행되며, 각 노드에 필요한 네트워크 규칙을 설정 
+    - 서비스 IP와 Pod IP 간의 매핑을 유지하여 안정적인 네트워크 통신 보장 
+
+2. 주요기능
+
+    2-1. Pod간 통신
+    - 쿠버네티스 클러스터의 Pod는 내부 가상 네트워크를 통해 서로 통신
+    - kube-proxy는 이 네트워크를 구성하고 관리
+
+    2-2. 서비스를 통한 트래픽 라우팅
+    - 서비스는 특정 Pod를 외부 또는 클러스터 내에서 접근할 수 있도록 추상화된 IP 주소와 이름을 제공 
+    - kube-proxy는 서비스 IP로 들어오는 트래픽을 백엔드 Pod로 전달 
+
+    2-3. 네트워크 규칙 생성
+    - iptables또는 ipvs를 사용하여 트래픽 라우팅 규칙을 설정
+    - 서비스 IP로 들어오는 요청을 실제 Pod IP로 포워딩하는 등의 규칙을 설정 
+
+3. 작동방식
+
+    3-1. Pod Network 설정
+    - 모든 Pod는 클러스터의 가상 네트워크에 연결
+    - 이 네트워크를 통해 Pod간 통신이 가능하도록 설정 
+
+    3-2. 서비스 생성시 동작 
+    - 사용자가 서비스를 생성하면 kube-proxy가 이를 감지하고, 각 노드에 필요한 네트워크 규칙을 설정 
+
+    3-3. 서비스 IP와 Pod IP 매핑
+    - kube-proxy는 서비스와 연결된 백엔드 Pod목록을 유지하며, 트래픽을 적절한 Pod로 라우팅
+
+    3-4. kubeadm으로 배포하는 경우, Daemonset형태로 자동 배포된다. 각 노드에 하나의 kube-proxy Pod가 실행된다. 
