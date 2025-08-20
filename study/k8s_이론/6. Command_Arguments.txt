@@ -1,0 +1,103 @@
+#참고 : https://sjw1995628.tistory.com/23
+
+##Docker에서의 Commands와 Arguments
+
+1. 기본 개념 
+- Docker 컨테이너는 특정 프로세스를 실행하기 위해 설계
+- 컨테이너 내부에서 실행되는 프로세스는 Docker이미지의 CMD 또는 ENTRYPOINT 지시어에 의해 정의
+- 컨테이너가 시작되면 이 지시어에 정의된 명령어가 실행 
+
+
+2. CMD
+
+    2-1. 정의 
+    - CMD: 컨테이너가 시작될 때 실행할 기본 명령어(default)를 정의
+    - 커맨드 라인 인수로 대체 가능 
+    - ex) Ubuntu 이미지를 기본적으로 bash를 실행하도록 설정 
+        CMD ["bash"]
+
+3. ENTRYPOINT
+
+    3-1. 정의
+    - 컨테이너가 시작될때 반드시 실행해야 하는 명령어를 정의
+    - CMD와 달리 ENTRYPOINT는 명령어를 고정하며, 추가적인 인수를 커맨드라인에서 전달받아 사용 가능
+
+
+4. CMD ENTRYPOINT 차이
+CMD	ENTRYPOINT
+기본 명령어를 설정하며, 커맨드 라인인수로 대체 가능	고정된 명령어를 설정하며, 인수는 추가적으로 전달 
+docker run ubuntu sleep 10 -> sleep 10	docker run ubuntu-sleeper 10 -> sleep 10 
+ 
+
+5. 예제
+
+    5-1. Ubuntu 이미지 실행
+    docker run ubuntu
+    - 기본적으로 bash가 실행되지만 터미널이 연결디지 않아 컨테이너가 즉시 종료된다.
+
+    5-2. 명령어 덮어쓰기 
+    docker run ubuntu sleep 5
+    -- 기본 명령어(bash) 대신 sleep 5가 실행됨
+
+    5-3. ENTRYPOINT 사용
+
+    FROM ubuntu
+    ENTRYPOINT ["sleep"]
+    CMD ["5"]
+    - 기본적으로 docker run ubuntu-sleep를 실행하면 sleep 5 가 실행된다. 
+    - 위 도커파일을 아래와 같이 실행하면
+
+    docker run ubuntu-sleeper 10
+    - sleep 10이 실행된다. 
+    - CMD 값은 ENTRYPOINT에 추가되며 커맨드 라인 인수로 덮어쓸 수 있다. 
+
+    5-4. ENTRYPOINT 덮어쓰기
+    docker run --entrypoint sleep2.0 ubuntu-sleeper 10
+    - 인수로 주어진 sleep2.0이 ENTRYPOINT에 덮어씌어지고 인수인 10이 CMD로 덮어씌어진다. 따라서 sleep2.0 10 이 실행된다. 
+
+ 
+
+##쿠버네티스에서 Command와 Argument
+- Docker의 CMD와 ENTRYPOINT개념을 확장해서 쿠버네티스 Pod 정의 파일에 사용 가능 
+
+1. Pod 정의 파일에서 Command와 Args
+
+    1-1. Command :
+    - Docker의 ENTRYPOINT를 오버라이드
+    - Pod가 시작될 때 실행할 명령어를 지정 
+
+    1-2. Args :
+    - Docker의 CMD를 오버라이드
+    - Command에 전달할 매개변수를 지정 
+
+2. 예제
+- 기존 ubuntu-sleeper 도커 이미지는 ENTRYPOINT sleep, CMD 5라고 가정하자 . 
+
+    2-1. 기본 Pod 정의 파일 
+        =============================
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: ubuntu-sleeper-pod
+        spec:
+          containers:
+          - name: ubuntu-sleeper
+            image: ubuntu-sleeper
+            args: ["10"]
+        =============================
+        - 이 경우, Docker 이미지의 CMD값을 오버라이드하여 sleep 10을 실행 
+
+    2-2. Command 필드를 사용한 ENTRYPOINT 오버라이드 
+        =============================
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: ubuntu-sleeper-pod
+        spec:
+          containers:
+          - name: ubuntu-sleeper
+            image: ubuntu-sleeper
+            command: ["sleep2.0"]
+            args: ["10"]
+        =============================
+        - 기존 ENTRYPOINT(sleep) 대신 sleep2.0 그리고 args 10과 합쳐져 sleep2.0 10이 실행된다.  
