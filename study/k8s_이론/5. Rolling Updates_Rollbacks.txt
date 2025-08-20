@@ -1,0 +1,81 @@
+#참고 : https://sjw1995628.tistory.com/22
+
+##Rolling Updates
+
+1. 개념
+- 쿠버네티스의 기본 배포 전략으로 어플리케이션의 가용성을 유지하면서 점진적으로 새로운 버전을 배포
+- 어플리케이션의 가용성을 유지하면서 점진적으로 새로운 버전을 배포
+
+
+2. 특징
+
+    2-1. 점진적 업데이트
+    - 기존 Pod를 하나씩 종료하고, 동시에 새로운 Pod를 하나씩 생성 
+    - 이 과정을 통해 어플리케이션의 다운타임 없이 업데이트가 가능
+
+    2-2. 자동 ReplilcaSet생성 
+    - 새로운 버전이 배포되면 쿠버네티스는 자동으로 새로운 ReplicaSet을 생성하여 새로운 Pod를 관리
+    - 이전 ReplicaSet은 점진적으로 축소 
+
+3. 예시
+    - 현 상황 기존 Nginx 1.7.1 버전을 사용하는 어플리케이션이 3개의 복제본으로 실행중임을 가정 
+    - 이를 Nginx 1.9.1로 업데이트하려면 다음 명령어를 사용 
+        kubectl set image deployment/myapp-deployment nginx=nginx:1.9.1
+    - 업데이트 상태를 확인
+        kubectl rollout status deployment/myapp-deployment
+        Waiting for rollout to finish: 0 of 3 updated replicas are available...
+        Waiting for rollout to finish: 1 of 3 updated replicas are available...
+        Waiting for rollout to finish: 2 of 3 updated replicas are available...
+        deployment "myapp-deployment" successfully rolled out
+    - ReplicaSet변화 
+        [업데이트 전]
+        NAME                              DESIRED   CURRENT   READY   AGE
+        myapp-deployment-67c749c58c      3         3         3       10m
+        [업데이트 후]
+        NAME                              DESIRED   CURRENT   READY   AGE
+        myapp-deployment-67c749c58c      0         0         0       10m
+        myapp-deployment-7d57dbdb8d      3         3         3       <new>
+
+
+4. Recreate Strategy
+
+    4-1. Recreate 전략: 롤링 업데이트와 달리 기존 Pod를 모두 종료한 후 새로운 Pod를 생성
+
+    4-2. 특징
+    - 모든 기존 Pod가 먼저 삭제되기 때문에 어플리케이션이 일시적으로 중단 
+    - 다운타임이 허용되는 경우에만 적합 
+    - 출력: 기존에 실행중인 Pod가 모두 종료된 후 새로운 Pod가 생성
+    kubectl rollout status deployment/myapp-deployment
+    Old ReplicaSet: Scaled down to zero
+    New ReplicaSet: Scaled up to desired replicas
+ 
+
+##Rollbacks
+
+1. 개념
+- 업데이트 이후 문제가 발생하면 쿠버네티스는 이전버전으로 쉽게 되돌릴 수 있음 
+
+
+2. 특징
+
+    2-1. Undo 명령어 사용 
+    kubectl rollout undo deployment/myapp-deployment
+    - 해당 명령어는 현재 ReplicaSet을 삭제하고 이전 ReplicaSet을 활성화 
+
+    2-2. 상태확인 
+    [롤백 전](이전 deployment: 67c7 // 이후 deployment: 7d57)
+    NAME                              DESIRED   CURRENT   READY   AGE
+    myapp-deployment-67c749c58c      0         0         0       <old>
+    myapp-deployment-7d57dbdb8d      3         3         3       <new>
+    [롤백 후]
+    NAME                              DESIRED   CURRENT   READY   AGE
+    myapp-deployment-67c749c58c      3         3         3       <old>
+    myapp-deployment-7d57dbdb8d      0         0         0       <new>
+    
+
+    2-3. Rollout History 확인 
+    - 배포 히스토리를 확인하려면 다음 명령어를 사용 
+    kubectl rollout history deployment/myapp-deployment
+    REVISION    CHANGE-CAUSE
+    1           <none>
+    2           kubectl apply --filename=deployment-definition.yml --record=true
