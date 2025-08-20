@@ -1,0 +1,514 @@
+
+#참고 : https://sjw1995628.tistory.com/19
+
+##Scheduling
+1. 수동 스케줄링
+
+    1-1. 개념
+    - 클러스터의 기본 스케줄러를 사용하지 않고 사용자가 직접 파드를 특정 노드에 할당하는 방식
+    - 스케줄러가 비활성화되어 있거나, 특정 요구사항에 따라 파드를 수동으로 배치해야 하는 경우에 유용 
+
+
+2. 스케줄링의 기본 원리
+- 쿠버네티스의 기본 스케줄러는 새로 생성된 파드 중 nodeName필드가 설정되지 않은 파드를 대상으로 적절한 노드를 선택
+- 스케줄러는 노드의 리소스 상태와 정책(affinity, taints/tolerations 등)을 고려하여 가장 적합한 노드를 선택하고, 선택된 노드의 이름을 파드의 nodeName필드에 설정
+- 그러나 스케줄러가 없으면 파드는 Pending 상태로 남아있으며 실행되지 않습니다. 
+
+
+3. 수동스케줄링 방법
+
+    3-1. nodeName 필드를 설정하여 파드 생성
+    ===============================================
+    apiVersion: v1
+    kind: Pod
+      metadata:
+        name: nginx
+        labels:
+          name: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 8080
+      nodeName: node02  #이 필드에 노드 이름을 지정
+    ===============================================
+    
+    [명령어로 확인]
+    kubectl get pods -o wide
+    --출력--
+    NAME    READY   STATUS    RESTARTS   AGE   NODE
+    nginx   1/1     Running   0          9s    node02
+
+    3-2. binding 객체를 사용하여 기존 파드 할당
+    - 이미 생성된 파드는 nodename 필드를 수정할 수 없다. 대신, binding 객체를 생성하여 API 서버에 요청을 보내면 특정노드로 할당
+
+    [binding.json]
+    ========================================
+    {
+      "apiVersion": "v1",
+      "kind": "Binding",
+      "metadata": {
+        "name": "nginx" # 바인딩한 파드이름 
+      },
+      "target": {
+        "apiVersion": "v1",
+        "kind": "Node",
+        "name": "node02"  # 배치할 노드 이름
+      }
+    }
+    ========================================
+
+    [yaml 버전]
+    ========================================
+    apiVersion: v1
+    kind: Binding
+    metadata:
+      name: nginx  # 바인딩할 파드 이름
+    target:
+      apiVersion: v1
+      kind: Node
+      name: node02  # 타겟 노드 이름
+    ========================================
+
+    [binding 생성 ]
+    kubectl create -f binding-definition.json
+
+    [조회]
+    kubectl get pods -o wide
+    NAME    READY   STATUS    RESTARTS   AGE   NODE
+    nginx   1/1     Running   0          9s    node02
+
+
+##라벨과 셀렉터
+- 라벨과 셀렉터는 객체를 그룹화하고 필터링하기 위한 강력한 도구. 클러스터 내의 다양한 리소스를 관리하고 특정 조건에 따라 선택할 수 있도록 돕는다. 
+
+1. 라벨 
+
+    1-1. 정의
+    - 쿠버네티스 객체에 부여되는 키-값 쌍으로, 객체를 분류하거나 그룹화하는 데 사용.(app:frontend, env: production과 같은 형식)
+    - 유연성: 라벨은 특정 목적에 따라 자유롭게 정의 
+    - 다중 라벨 지원: 객체에 여러 개의 라벨을 추가할 수 있음 
+
+    1-2. 정의방법
+    - yaml파일에서 metadata.labels 섹션에 정의
+    ========================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: nginx
+      labels:
+        app: frontend
+        env: production
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+    ========================
+
+2. 셀렉터 
+
+    2-1. 정의
+    - 특정 조건을 기반으로 부여된 객체를 필터링하는 데 사용
+    - kubectl 명령어를 통한 객체 조회와 kubernetes 리소스 정의에서 다른 객체와 연결하는 데 사용됨
+
+    2-2. 사용방법
+    - kubectl 명령어로 필터링 : kubectl get 명령어와 함께 --selector 옵션을 사용하여 특정 조건을 만족하는 객체를 조회. app=frontend 라벨이 있는 모든 파드를 조회 
+    kubectl get pods --selector app=frontend
+    - 리소스 정의에서 셀렉터 사용: 쿠버네티스 리소스(ReplicaSet, Service 등)에서 셀렉터를 사용하여 다른 객체와 연결 
+    ====================================================
+    apiVersion: apps/v1
+    kind: ReplicaSet
+    metadata:
+      name: frontend-replicaset
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: frontend  # 이 셀렉터가 파드의 라벨과 매칭됨
+      template:
+        metadata:
+          labels:
+            app: frontend
+        spec:
+          containers:
+          - name: nginx
+            image: nginx
+    ====================================================
+    - selector.matchLabels: ReplicaSet이 관리할 파드를 선택하는 기준
+    - template.metadata.labels: 생성된 파드에 적용될 라벨 
+
+3. 라벨과 셀렉터의 주요 사용 사례
+
+    3-1. 그룹화 및 필터링
+    - 클러스터 내에 많은 리소스가 있을 때, 특정조건에 따라 리소스를 그룹화하거나 필터링 가능 
+
+    3-2. 연결 및 관리
+    - ReplicaSet, Service 등은 셀렉터를 통해 관련된 파드를 자동으로 관리 
+    - Service는 셀렉터를 기반으로 트래픽을 적절한 파드로 전달
+    ===================================================
+    apiVersion: v1
+    kind: Service
+      metadata:
+        name: frontend-service
+    spec:
+      selector:
+        app: frontend  # 이 셀렉터가 파드의 라벨과 매칭됨
+      ports:
+      - protocol: TCP
+        port: 80
+        targetPort: 8080
+    ===================================================
+
+
+##Taints와 Tolerations 
+- Pod가 특정 노드에 스케줄링되는 방식에 제한을 두기 위해 사용되는 메커니즘. 이를 통해 특정 노드에 특정 애플리케이션이나 워크로드를 배치하거나, 특정 노드에 불필요한 Pod를 배제 가능.
+
+1. Taints
+
+    1-1. 정의: Taints는 노드에 설정되어, 특정 조건을 만족하지 않는 Pod가 해당 노드에 스케줄링되지 못하게 한다. 
+
+    1-2. 구성요소: 
+    - Key-Value pair: taint는 key=value 형태로 정의된다. (app=blue)
+    - Effect: Taint가 Pod에 미치는 영향을 정의
+    - `Effect: NoSchedule`: 톨러레이션에서 Taint를 허용하지 않는 Pod는 해당 노드에 스케줄링되지 않습니다. 
+    - `Effect: PreferNodSchedule`: 톨러레이션에서 Taint를 허용하지 않는 Pod의 스케줄링을 최대한 피하지만, 반드시 배제되지 않는다.
+    - `Effect: NoExecute`: 톨러레이션에서 Taint를 허용하지 않는 Pod는 해당 노드에서 제거되며, 새로운 Pod도 스케줄링되지 않는다. 기존에 실행 중인 Pod는 해당 Taint를 허용하지 않으면 강제로 퇴출하고, 새로운 Pod도 스케줄링되지 않는다.
+
+    1-3. 적용 방법
+    [해당 노드에 key value와 효과를 적용한다.]
+    kubectl taint nodes <node-name> <key>=<value>:<effect>
+    kubectl taint nodes node1 app=blue:NoSchedule
+
+
+2. Tolerations
+
+    2-1. 정의
+    - 톨러레이션은 Pod에 설정되어, 특정 Taint를 허용하고 해당 노드에 스케줄링될 수 있도록 합니다. 
+
+    2-2. 구성요소
+    - Taint와 동일하게 key, value, effect를 사용하여 정의
+
+    2-3. Pod정의 파일에 추가하기
+    - Pod 정의파일에 tolerations 섹션을 추가
+    ============================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: myapp-pod
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx
+      tolerations:
+      - key: "app"
+        operator: "Equal"
+        value: "blue"
+        effect: "NoSchedule"
+    ============================
+
+
+3. Taints와 Tolerations의 동작 방식
+
+    3-1. 노드에 Taint를 추가한다. (ex: app=blue:NoSchedule)
+
+    3-2. 기본적으로 모든 Pod는 이 Taint를 허용하지 않으므로, 해당 노드에 어떤 Pod도 스케줄링되지 않습니다. 
+
+    3-3. 특정 pod가 해당 노드에서 실행되도록 하려면 그 Pod에 일치하는 Toleration 추가하면 됩니다. 
+
+    3-4. 쿠버네티스 스케줄러는 이제 Toleration이 있는 Pod만 해당 노드에 배치 (key, operator, value, effect 다 동일해야 한다. 
+
+    [해당 노드1에 taint를 추가한다. ]
+    kubectl taint nodes node1 app=blue:NoSchedule
+
+    [노드1에 배치해야할 PodA를 배치하고 싶을 경우 아래와 같이 Toleration을 추가한다.]
+    =============================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: pod-a
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx
+      tolerations:
+      - key: "app"
+        operator: "Equal"
+        value: "blue"
+        effect: "NoSchedule"
+    =============================
+
+4. 특수 고려사항
+
+4-1. 마스터 노드
+- 기본적으로 쿠버네티스는 마스터 노드에 `node-role.kubernetes.io/master:NoSchedule`이라는 Taint를 설정하여 일반 워크로드가 마스터 노드에 배치되지 않는다. 
+
+4-2. Node Affinity와의 차이점
+- Taints/Tolerations: 특정 노드에서 어떤 Pod가 실행된 수 없는지를 제어한다. 특정 노드에 특정 Pod가 무조건 실행되는지를 보장하지 않는다. 
+- Node Affinity: 특정 Pod가 어떤 노드에서 실행되어야 하는지를 제어 
+
+ 
+
+##NodeSeletor와 NodeAffinity
+- NodeSelector와 NodeAffinity는 쿠버네티스에서 특정 Pod를 특정 Node에 스케줄링하는 방법을 제공하는 기능을 가지고 있다. 
+
+    1. Node Selector
+
+    1-1. 정의: 쿠버네티스에서 제공하는 가장 간단한 방식으로, 특정 라벨이 설정된 노드에만 Pod를 배치할 수 있도록 한다. 
+
+    1-2. 간단한 Key-Value 기반 매칭
+    - Node Selector는 노드에 설정된 라벨(Key-Value 쌍)을 기준으로 pod를 배치 
+    - 단순한 매칭만 가능하며, 복잡한 조건(AND, OR, NOT)을 사용할 수 없음
+
+    1-3. 사용방법
+    - 노드 라벨링: 먼저 노드에 라벨을 추가
+    [template]
+    kubectl label nodes <node-name> <label-key>=<label-value>
+    [예시]
+    kubectl label nodes node1 size=large
+
+    - Pod 정의 파일에 Node Selector 추가
+    [size=large 라벨이 있는 노드(node1)에만 Pod가 스케줄링된다.]
+    ================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: myapp-pod
+    spec:
+      containers:
+      - name: data-processor
+        image: data-processor
+      nodeSelector:
+        size: large
+    ================================
+
+2. Node Affinity
+
+    2-1. 정의: Node Selector의 확장된 버전으로, 더 복잡한 조건을 사용하여 Pod 배치를 제어가능 
+
+    2-2. 특징
+    - 복잡한 조건 지원: AND,OR,NOT 같은 논리 연산자를 활용 
+    - 유연성 제공: 특정 조건을 `필수(required)`로 설정하거나 `선호(preferred)`로 설정 가능
+    - 타입 두 가지를 제공한다. 
+    - RequiredDuringSchedulingIgnoredDuringExecution(필수조건): 스케줄링 시 반드시 조건을 만족해야 하지만, 실행 중에는 조건 변경이 무시 
+    - PreferredDuringSchedulingIgnoredDuringExecution(선호조건): 스케줄링시 조건을 만족하려고 노력하지만, 필수는 아님 
+
+    2-3. 사용방법 
+    - Pod 정의 파일에 NodeAffinity 추가
+    ==========================================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: myapp-pod
+    spec:
+      containers:
+      - name: data-processor
+        image: data-processor
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+            - key: size
+                operator: In
+                values:
+                - large
+                - medium
+          preferredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+            - key: size
+                operator: NotIn
+                values:
+                - small
+    ==========================================================
+    - 필수조건(RequiredDuringSchedulingIgnoredDuringExecution): 
+    size 라벨이 large 또는 medium인 노드에만 Pod가 스케줄링됨
+    - 선호조건(PreferredDuringSchedulingIgnoredDuringExecution): 
+    size 라벨이 small이 아닌 노드를 선택하려고 한다.
+
+##Multiple Scheduler
+
+1. 개념
+- 기본 스케줄러(kube-scheduler) 외에 추가적인 스케줄러를 배포하여 특정 요구사항에 맞는 Pod를 스케줄링할 수 있는 기능을 제공. 
+- 기본 스케줄러가 제공하는 기능으로 충족되지 않는 특정 애플리케이션의 요구사항을 해결하거나, 더 세부적인 제어를 위해 사용 
+
+    1-1. 기본 스케줄러(default-scheduler) 
+    - 기본 스케줄러는 새로 성성되었거나 아직 노드에 할당되지 않은 Pod를 감시하고 적합한 노드에 배치
+    - 기본적으로 리소스 요청, 노드 어피니디, Taint Toleration 등을 고려하여 Pod를 적절한 노드에 스케줄링
+
+    1-2. 커스텀 스케줄러
+    - 사용자가 직접 정의한 로직으로 pod를 특정조건에 따라 배치
+    ex) GPU 활용 최적화, 특정 워크로드 간 간섭 최소화 등 
+
+    1-3. 스케줄러 이름(SchedulerName)
+    - 각 스케줄러는 고유한 이름을 가져야 하며, Pod 명세파일에서  schedulername 필드를 통해 특정 스케줄러를 지정 가능
+    =====================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: custom-pod
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+      schedulerName: my-custom-scheduler
+    =====================================
+
+    1-4. 리더 선출(Leader Election)
+    - 다중 마스터 노드 환경에서 동일한 스케줄러 복사본이 실행될 경우, --leader-elect=true 옵션을 통해 한 번에 하나의 활성 스케줄러만 작동하도록 설정 
+    - 단일 마스터 환경에서는 이 옵션을 False로 설정해야 함
+    - 설정 이유: 고가용성 환경에서 동시에 프로세스를 접근하면 일관성의 문제(충돌)가 발생할 수 있다. 기존 리더 스케줄러가 실패하면 다른 복제본에서 리더를 빨리 선출하여 다운타임을 최소화할 수 있다. 
+
+2. 배포 방법
+
+    2-1. 기존 kube- scheduler 복제한 뒤 신규 scheduler 생성
+    - 기존 kube-scheduler 설정 파일(pod)을 복사하여 새로운 이름과 설정으로 커스텀 스케줄러를 생성한다.
+    ==============================================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-custom-scheduler
+      namespace: kube-system
+    spec:
+      containers:
+      - name: kube-scheduler
+        image: k8s.gcr.io/kube-scheduler:v1.11.3
+        command:
+        - kube-scheduler
+        args:
+        - --config=/etc/kubernetes/my-custom-scheduler-config.yaml
+        - --leader-elect=true
+        - --scheduler-name=my-custom-scheduler
+    ==============================================================
+
+    2-2. Configmap을 통한 설정 전달
+    - 커스텀 스케줄러의 설정파일은 ConfigMap으로 생성하여 Pod에 마운트 할 수 있다. 
+    ==============================================================
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: my-custom-scheduler-config
+      namespace: kube-system
+    data:
+      config.yaml: |
+        apiVersion: kubescheduler.config.k8s.io/v1beta1
+        kind: KubeSchedulerConfiguration
+        leaderElection:
+          leaderElect: true
+        schedulerName: my-custom-scheduler
+    ==============================================================
+
+    2-3. Pod 또는 Deployment로 배포
+    - 커스텀 스케줄러는 일반적으로 클러스터 내에서 Deployment로도 배포가 가능하다. 
+    ==============================================================
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: my-custom-scheduler-deployment
+      namespace: kube-system
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+        app: my-custom-scheduler
+      template:
+        metadata:
+          labels:
+            app: my-custom-scheduler
+        spec:
+          containers:
+          - name: kube-scheduler
+            image: k8s.gcr.io/kube-scheduler:v1.11.3
+            args:
+            - --config=/etc/kubernetes/my-custom-scheduler-config.yaml
+            volumeMounts:
+            - mountPath: /etc/kubernetes/
+            name: config-volume
+          volumes:
+          - name: config-volume
+            configMap:
+            name: my-custom-scheduler-config
+    ==============================================================
+
+
+##Scheduler Profile
+
+1. 개념
+- 쿠버네티스 스케줄러가 Pod를 스케줄링하는 과정에서 어떤 플러그인과 규칙을 사용할지 정의
+- 각 프로파일은 고유한 Scheduler Name을 가지며, Pod는 .spec.schedulerName필드를 통해 특정 프로파일을 사용 가능
+
+
+2. 주요 특징 
+
+    2-1. 단일 스케줄러 바이너리에서 다중 프로파일 지원 
+    - 여러 프로파일을 하나의 kbue scheduler 프로세스 내에서 실행 가능
+    - 각 프로파일은 독립적으로 작동하며, 서로 다른 플러그인 구성을 가짐
+
+    2-2. 유연한 플러그인 구성
+    - 각 스케줄링 단계에서(필터링, 점수매기기 등) 에 대해 활성화하거나 비활성화할 플러그인을 지정 가능 
+    - 필요에 따라 사용자 정의 플러그인을 추가 가능 
+
+    2-3. 효율적인 관리
+    - 다중 스케줄러 바이너리를 실행하는 대신, 단일 프로세스 내에서 여러 프로파일을 구성함으로써 관리 복잡성을 줄이고 경쟁상태를 방지 
+
+
+3. 스케줄링 단계에서 익스텐션 포인트
+- 스케줄링은 여러 단계로 이루어지며 각 단계는 익스텐션 포인트를 통해 플러그인을 연결 가능
+    Pre-filter: 필터링 이전에 데이터를 준비.
+    Filter: Pod를 실행할 수 없는 노드를 필터링.
+    Post-filter: 필터링 후 추가 작업 수행.
+    Score: 적합한 노드에 점수를 매겨 우선순위 결정.
+    Reserve: 노드에 리소스를 예약.
+    Permit: Pod 배치를 승인하거나 대기 상태로 설정.
+    Pre-bind: 바인딩 전에 작업 수행.
+    Bind: Pod를 노드에 바인딩.
+    Post-bind: 바인딩 이후 작업 수행.
+
+
+4. 구성방법
+
+    4-1. 프로파일 정의
+    - 스케줄러 구성파일(KubeSchedulerConfiguration) 에서 여러 프로파일을 정의
+    ===========================================
+    apiVersion: kubescheduler.config.k8s.io/v1
+    kind: KubeSchedulerConfiguration
+    profiles:
+      - schedulerName: default-scheduler
+        plugins:
+          filter:
+            enabled:
+            - name: NodeResourcesFit
+          score:
+            enabled:
+            - name: ImageLocality
+      - schedulerName: custom-scheduler
+        plugins:
+          filter:
+            enabled:
+            - name: TaintToleration
+          score:
+            disabled:
+            - name: '*'
+    ===========================================
+    - apiVersion과 kind를 명시한뒤에 바로, profiles를 정의한다. profiles는 array형식으로 총 두개의 다른 스케쥴러 프로파일(default-scheduler 기본 스케줄러, custom- scheduler 사용자 정의 스케줄러)을 정의하고 있다.
+    - schedulerName: 각 스케줄러 프로파일의 고유이름을 정의. pod의 .spec.schedulername을 통해서 특정 스케줄러 프로파일을 지정 가능 
+    - plugins: 각 프로파일은 활성화하거나 비활성화할 플러그인 목록을 정의(스케줄링 과정에서 필터링, 점수 매기기 등에서 동작을 제어)
+    - NodeResourceFit: 리소스가 부족한 자원을 필터링
+    - ImageLocality: Pod가 사용하는 컨테이너 이미지가 이미 노드에 존재하면 높은 점수 
+    - TaintToleration: 노드에 설정된 Taint를 허용하는지 확인하고 허용되지 않으면 배치하지 앟는다. 
+    - score.disabled.name.* : 모든 플러그인 비활성화로 점수매기기 단계가 생략된다. 
+
+    4-2. Pod에 특정 프로파일 지정 
+    - .spec.schedulerName필드를 사용해 지정 
+    ==================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: custom-pod
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+      schedulerName: custom-scheduler
+    ==================================
