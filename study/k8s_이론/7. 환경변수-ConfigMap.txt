@@ -1,0 +1,129 @@
+#참고: https://sjw1995628.tistory.com/24
+
+##환경변수
+
+1. Pod 정의 파일에서 직접 설정 
+- Pod 정의 파일에서 환경변수를 설정하려면 env속성을 사용 
+- env는 배열 형식이며 각 항목은 name과 value 속성을 포함 
+    =================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: simple-webapp-color
+    spec:
+      containers:
+      - name: simple-webapp-color
+        image: simple-webapp-color
+        ports:
+        - containerPort: 8080
+        env:
+        - name: APP_COLOR
+          value: "blue"
+    =================================
+- 위 예제는 'APP_COLOR'라는 환경 변수를 설정하고 값으로 blue를 제공 
+- 이 환경변수는 컨테이너 내부에서 어플리케이션이 사용가능 
+
+
+2. 실행 중 환경변수 확인 
+- 컨테이너 내부에서 환경변수를 확인하려면 다음 명령어를 실행 
+kubectl exec -it simple-webapp-color -- printenv APP_COLOR
+
+
+##ConfigMap
+- 다수의 설정 데이터를 중앙에서 관리할 수 있는 쿠버네티스 리소스 
+- Pod 정의 파일에서 환경변수를 직접 정의하지 않고도 데이터를 주입 
+
+1. 명령어를 사용한 생성 
+- kubectl create configmap 명령어를 사용하여 ConfigMap을 생성 
+  kubectl create configmap app-config --from-literal=APP_COLOR=blue --from-literal=APP_MODE=prod
+- APP_COLOR=blue와 APP_MODE=prod 키-값 쌍이 포함된 ConfigMap이 생성 
+
+
+2. YAML 파일을 사용한 생성 
+- YAML 파일로 ConfigMap을 정의하고 적용 
+
+    [config-map.yaml]
+    =======================================
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: app-config
+    data:
+      APP_COLOR: "blue"
+      APP_MODE: "prod"
+    =======================================
+
+    [ConfigMap 생성]
+    kubectl apply -f config-map.yaml
+
+    [ConfigMap 확인]
+    kubectl get configmaps
+    kubectl describe configmap app-config
+
+
+3. ConfiMap을 Pod에 주입 
+- 두가지 방법으로 가능하다. 
+
+    3-1. 환경변수로 주입
+    - Pod 정의파일의 envFrom 속성을 사용하여 ConfigMap 전체를 환경 변수로 주입 가능 
+    ===============================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: simple-webapp-color
+    spec:
+      containers:
+      - name: simple-webapp-color
+        image: simple-webapp-color
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: app-config
+    ===============================
+    - app-config라는 ConfigMap의 모든 키-값 쌍이 컨테이너의 환경변수로 주입됨 
+    - APP_COLOR=blue와 APP_MODE=prod와 같은 환경변수 모두 사용가능 
+
+    3-2. 특정키만 주입 
+    - Pod정의파일의 env 속성을 사용하여 ConfigMap의 특정 키만 선택적으로 주입 
+    =======================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: simple-webapp-color-specific-env
+    spec:
+      containers:
+      - name: simple-webapp-color
+        image: simple-webapp-color
+        ports:
+        - containerPort: 8080
+        env:
+        - name: APP_COLOR
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: APP_COLOR
+    =======================================
+    - 해당 예제에서는 app-config ConfigMap 에서 APP_COLOR 키만 선택하여 Pod에 주입 
+
+    3-3. ConfigMap을 볼륨으로 마운트
+    - ConfigMap 데이터를 파일형태로 컨테이너에 제공하려면 볼륨으로 마운트 가능 
+    =======================================
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: simple-webapp-volume-mount
+    spec:
+      containers:
+      - name: simple-webapp-color
+        image: simple-webapp-color
+        volumeMounts:
+        - name: config-volume
+          mountPath: "/etc/config"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: app-config
+    =======================================
+    - 위 예제에서는 app-config ConfigMap 데이터를 /etc/config 디렉토리에 파일로 마운트 합니다. 
+    - 결과적으로 컨테이너 내부에서 /etc/config/APP_COLOR, /etc/config/APP_MODE 파일을 읽어 설정 데이터를 사용 가능
