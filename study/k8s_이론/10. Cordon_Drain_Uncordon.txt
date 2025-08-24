@@ -1,0 +1,43 @@
+#참고: https://sjw1995628.tistory.com/28
+
+##Cordon, Drain, Uncordon
+
+1. 노드 관리: Cordon과 Drain
+- 운영체제 업그레이드 수행하기 전에, 해당 노드에서 실행중인 워크로드를 안전하게 처리하기 위해, cordon,drain,uncordon 명령어를 활용
+
+  1-1. Cordon: 노드 스케줄링 비할성화
+  - kubectl cordon <node_name> : 해당 노드를 스케줄링 불가능 상태로 설정(SchedulingDisabled)
+  - 이 명령은 새로운 Pod이 해당 노드에 배치되지 않도록 하지만, 기존 Pod는 그대로 유지 
+
+  1-2. Drain: 워크로드 이동
+  - kubectl drain <node_name> : 명령어는 해당 노드에 존재하는 모든 Pod을 제거하고, 다른 노드로 재배치
+  - DaemonSet과 같은 특정 Pod은 기본적으로 이동되지 않으므로 '--ignore-daemonsets' 옵션을 추가해야함 
+  - Drain된 노드는 자동으로 스케줄링이 비활성화 
+  - Standalone Pod(Replicaset이나 Deployment와 무관한 Pod)는 삭제되고 복구되지 않음
+
+  1-3. Uncordon: 스케줄링 복구
+  - 업그레이드 작업이 완료된 후, kubectl uncordon <node_name> 명령어를 사용하여 해당 노드를 다시 스케줄링 가능 상태로 복구
+
+
+2. Pod Eviction Timeout
+- 쿠버네티스는 기본적으로 Pod Eviction Timeout(포드 제거 시간 초과)을 통해 Pod가 일정시간 이상 응답하지 않을 경우 해당 Pod을 죽은 것으로 간주하고 다른 노드에서 새롭게 생성 
+  - 기본 값은 5분으로 설정되어 있으며, 이는 kube-controller-manager의 --pod-eviction-timeout옵션으로 조정 가능 
+  - 만약 노드가 5분 이내에 복구되면 기존 Pod이 다시 활성화되지만, 그렇지 않으면 새로운 Pod이 다른 노드에서 생성 
+
+
+3. 노드 업그레이드 수행
+
+  3-1. 노드를 conrdon 상태로 설정 
+  kubectl cordon <노드 이름>
+  - 업그레이드 동안 새로운 Pod이 해당 노드에 스케줄링되지 않도록 방지 
+
+  3-2. 노드를 drain하여 워크로드 이동 
+    kubectl drain <노드 이름> --ignore-daemonsets --delete-local-data
+    - DaemontSet이나 로컬 데이터를 가진 pod를 제외한 모든 워크로드를 다른 노드로 이동시킴 (daemonset과 local data도 삭제)
+
+  3-3. 노드 업그레이드 수행
+  - OS패치나 커널 업데이트를 적용하고 시스템을 재부팅 
+
+  3-4. 노드를 다시 클러스터에 추가 
+  - 업그레이드 완료 후, 노드를 다시 스케줄링 가능 상태로 설정
+  kubectl uncordon <노드 이름>
