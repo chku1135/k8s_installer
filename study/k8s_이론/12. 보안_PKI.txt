@@ -1,0 +1,517 @@
+##참고: https://sjw1995628.tistory.com/5
+
+##쿠버네티스 구성요소(ETCD, Kubelet, Kube Scheduler)등 주요 요소 간 안전한 통신을 위해, TLS인증서를 통해 암호화한다. 
+
+1. 네트워크 정책 : 클러스터에서 Pod 간의 트래픽과 Pod과 외부 네트워크 간의 트래픽을 제어하는 규칙
+- By default, 모든 트래픽 허용 --> 규칙을 설정해서 특정 트래픽만 허용하도록 제한 가능
+즉 아무것도 정의되지 않으면 모든 트래픽이 허용되고, 규칙이 추가될 시 명시된 규칙에 적힌 트래픽만 통과.
+
+[192.168.1.0/24:80에서 오는 트래픽만 Pod에 허용  ]
+=====================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-specific-ingress
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: my-app
+  policyTypes:
+  - Ingress
+  ingress:
+  	- from:
+      - ipBlock:
+          cidr: 192.168.1.0/24
+    ports:
+    	- protocol: TCP
+      	  port: 80
+=====================================
+
+  1-1. 주요 개념
+  - Pod Selector: 특정 Pod에만 정책을 적용하도록 하는 Part. 특정 Label에 매칭되는(matchLabel) POD에 적용 
+  - Ingress(밖-->안)/Egress(안-->밖): 외부에서 POD로 // POD에서 외부로 오가는 트래픽을 제어 
+  - Namespace isolation: 네트워크 정책을 네임스페이스 단위로 적용 
+
+
+##계정
+
+1. 사용자계정 VS 서비스 계정
+
+  1-1. 사용자 계정 
+  - 사람(유저, 개발자, 관리자)을 위한 계정
+  - 외부 인증 시스템(LDAP)과 연동 가능
+  - Kubernetese 자체적으로 사용자 계정을 직접 생성하거나 저장 X
+  --> 사용자 계정을 내부에서 직접 관리하는 것은 보안상 취약(유출, 비밀번호 분실) 
+  --> 또한 Kubernetes 내에서도 이를 자동으로 관리해 주는 기능이 없어, 권장하지 않는다.
+
+
+2. 서비스 계정
+- Pod, Application, 프로세스를 위한 계정
+- Kubernetes가 클러스터 내에서 자동으로 생성, 관리하는 계정 
+- Pod가 API서버와 상호작용할 때 사용하는 계정 
+--> 사용자 계정과 달리 자동으로 생성 및 관리하여 효율적
+--> 각 Pod에 고유한 서비스 계정을 할당하여 Pod에 적합한 최소 권한원칙을 쉽게 구현
+- 네임스페이스에 종속되며 자동 또는 수동으로 생성 가능
+- 생성 명령어
+  kubectl create serviceaccount <SERVICE_ACCOUNT_NAME>
+- 명령어 생성시 관련 계정의 토큰은 시크릿 객체로 자동 생성되고 계정과 연동된다. 
+
+
+3. 인증 메커니즘
+- 클라이언트(kubelet, 어플리케이션.. 등)가 API 서버에 요청을 보낸다. 
+- API서버는 제공된 자격증명(PW, Token, Cert)을 검증
+- 인증이 성공하면 요청 승인
+
+
+4. 인증방법
+
+  4-1. 기본 인증 
+  - 사용자 이름과 비밀번호를 사용 
+  - `--basic-auth-file=user-info.csv`플래그를 통해 구성 
+
+  user-info.csv:인증을 위한 정보로 pw,user,uid로 구성된다. 이를 통해 인증이 진행된다.
+      PW     || USER  || UID
+  password123, user1, u0001 
+  password123, user2, u0002 
+  password123, user3, u0003 
+  password123, user4, u0004 
+  password123, user5, u0005
+
+  - curl 을 사용해서 인증가능 
+  curl -v -k https://master-node-ip:6443/api/v1/pods -u "user1:password123"
+  - 간단하지만, 평문으로 보안상 취약
+
+  4-2. 토큰 기반 인증: 
+  - 고유한 토큰을 사용해 인증
+  - `--token-auth-file` 플래그를 통해 구성 
+  - curl을 사용해서 인증 가능
+
+  curl -v -k https://master-node-ip:6443/api/v1/pods --header "Authorization: Bearer <TOKEN>"
+
+  <명령어 해석>
+  - curl : HTTP 요청 명령어
+  - -v(verbose): 상세 디버깅 정보 출력
+  - -k(insecure) : SSL 인증서를 검증하지 않고, 요청을 보냄, Kubernetes API 서버가 자체 서명된 인증서를 사용하는 경우, 이 옵션을 달아야 함. (따라서 찐으로 보안상 민감한 환경에서는 좋지 않다)
+  - header : Authorization 헤더를 붙여서 , 토큰을 전달한다. 
+  - 플래그 `--token-auth-file=user-token.csv`를 통해서 API서버 설정가능하다. 
+
+  [kube-apiserver.service]
+  =========================================================================
+  #API서버 설정 예시 
+  ExecStart=/usr/local/bin/kube-apiserver \
+    --advertise-address=${INTERNAL_IP} \
+    --allow-privileged=true \
+    --authorization-mode=Node,RBAC \
+    ## 인증 방법
+    --basic-auth-file=user-details.csv \
+    --token-auth-file=user-token-details.csv \
+    --service-account-key-file=/var/lib/kubernetes/service-account.pem
+  =========================================================================
+
+  4-3. 인증서 기반 인증:
+  - 클라이언트 인증서를 사용한다. 
+  - 관리자나 App간 통신에 사용
+
+  openssl req -new -key user.key -out user.csr
+  openssl x509 -req -in user.csr -CA ca.crt -CAkey ca.key -out user.crt
+
+  4-4. 외부인증 제공자(LDAP) 
+  - OIDC, LDAP와 같은 외부 ID 제공자를 통해 사용자 인증 관리 
+
+
+##쿠버네티스 PKI 
+
+1. PKI: 공개키 암호화를 기반으로 한 보안 프레임워크로 Kubernetes에서 클러스터 내 구성요소의 통신을 보호하기 위해 사용되는 기반(인증서, 개인키, 인증기관)
+
+  1-1. 구성요소
+  - 인증서: 공개 키와 관련된 신뢰 정보를 포함
+  - 개인키: 데이터 암호화 및 서명에 사용
+  - 인증기관: 인증서를 발급하고 신뢰를 보장
+
+2. 쿠버네티스에서의 PKI
+
+  2-1. Public Key: *. crt, *. pem // Private Key: *. key, *-key.pem
+  -. pem: Pirvacy Enhanced Mail형식으로 저장된 암호화 키, 인증서 또는 기타 데이터를 나타냄. TLS/PKI 기반 보안 통신을 설정하는 데 사용. PEM 형식이 더 유연하고 표준화된 컨테이너(crt+key 합체된 컨테이너) 역할을 수행하며 키, 인증서를 저장하거나 전송하는데 적합하다. Base 64 ASCII 형식으로 인코딩 되어 있으며, 개인키와 인증서를 같이 합쳐서 표현도 가능하다. 
+
+  -----BEGIN PRIVATE KEY-----
+  (개인 키 내용)
+  -----END PRIVATE KEY-----
+  -----BEGIN CERTIFICATE-----
+  (인증서 내용)
+  -----END CERTIFICATE-----
+
+  2-2. CA(루트) 인증서 및 키(`ca.crt`,`ca.key`):
+  - 클러스터내 모든 구성요소가 신뢰할 수 있는 루트 인증서를 제공(CA)
+  - 다른 인증서(API 서버, etcd 등)에 사용되기 위해 필요한 서명을 제공하여, 신뢰체계를 설정 
+  - 모든 구성요소는 ca.crt를 사용해 서로의 인증서를 검증 (모든 구성요소에 배포됨)
+  - /etc/kubernetes/pki/ca.crt
+  - ca.key, 루트 CA의 개인키로 새로운 인증서를 서명하는 데 사용한다. 
+
+  2-3. 서버 인증서(`server.crt`) // 서버 개인키(`server.key`):
+  - 서버 인증서:서버의 public 인증서로 서버의 엔드포인트가 신뢰할 수 있음을 클라이언트에 증명
+  - 클라이언트는 이 인증서를 사용해 서버의 신원을 확인한다. 
+  - 인증이 완료된 클라이언트 서버 간 데이터를 전송하기 위해 개인키를 활용하여 데이터 암호화를 진행한다.
+  - /etc/kubernetes/pki/server.crt(.key)
+
+  2-4. 클라이언트 인증서(`client.crt`)// 클라이언트 개인키(`client.key`):
+  - 서버인증서와 유사하다. 클라이언트에서 사용하는 인증서로, 클라이언트가 신뢰할 수 있음을 증명한다. 
+  - API 서버나 다른 구성요소와 신뢰관계를 구축하고, 데이터 암호화에 사용한다. 
+  - /etc/kubernetes/pki/client.crt(.key)
+
+  2-5. 그 외에도 kubelet, apiserver, etcd 등 쿠버네티스 주요 요소에도 apiserver.crt(key), kubelet-client.crt(key), etcdserver.crt(key)존재한다.
+ 
+
+3. CA생성 및 관리 
+- OpenSSL(TLS 구성요소를 위한 오픈소스 라이브러리)  등을 활용하여 CA를 발급할 수 있다. 
+
+  3-1. 키 생성: Openssl을 통해 RSA, ECC 등의 알고리즘을 사용해 개인, 공개키를 생성 
+
+  [2048비트 RSA 개인키]
+  openssl genrsa -out private.key 2048
+
+  3-2. 인증서 CSR 생성
+  - CSR: 인증서 서명 요청으로 CA에게 인증서를 요청하기 위해 필요한 정보 
+  - CSR에서 생성되는 곳(etcd, apiserver)에 따라 내용과 설정이 달라짐. 
+
+  [api-server]
+  openssl req -new -key apiserver.key \
+    -subj "/CN=kube-apiserver" \
+    -out apiserver.csr \
+    -config openssl.cnf
+
+  [etcd]
+  openssl req -new -key etcdserver.key \
+    -subj "/CN=etcd-server" \
+    -out etcdserver.csr
+
+  [kubelet]
+  openssl req -new -key kubelet.key \
+    -subj "/CN=system:node:<NODE_NAME>/O=system:nodes" \
+    -out kubelet.csr
+  - CN : 주체 이름(서버이름, 사용자이름)
+  - config openssl.cnf : 이 config항목에서 SAN(Subect Alternate name)을 설정한다. apiserver의 IP와 DNS이름을 설정한다. 
+
+  [openssl.cnf]
+  ===========================================================================================
+  ##CSR을 생성할때 사용할 기본 설정을 정의
+  [req]
+  ## CSR에 추가할 확장필드를 지정.. v3_req를 참조한다.
+  req_extensions = v3_req
+
+  [v3_req]
+  ##해당 인증서가 CA인증서 여부 확인
+  basicConstraints = CA:FALSE
+  ##인증서의 용도를 정의, nonRequdiation(데이터의 무결성보장),digitalSignature(디지털 서명에 사용), keyEncipherment(암호화에 사용)
+  keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+  ##추가적인 용도를 정의, serverAuth(서버인증용도),clientAuth(클라이언트 인증용)
+  extendedKeyUsage = serverAuth, clientAuth
+  ##SAN필드를 정의 @alt_names를 참조
+  subjectAltName = @alt_names
+
+  [alt_names]
+  DNS.1 = kubernetes
+  DNS.2 = kubernetes.default
+  DNS.3 = kubernetes.default.svc
+  DNS.4 = kubernetes.default.svc.cluster.local
+  IP.1 = 10.96.0.1
+  IP.2 = 172.17.0.87
+  ===========================================================================================
+  - O : 조직 설정// system 중 OU 조직 설정 
+
+  3-3. CSR을 활용하여 CA 인증서 발급
+
+  openssl x509 -req -in apiserver.csr \
+    -CA ca.crt -CAkey ca.key \
+    -CAcreateserial \
+    -out apiserver.crt \
+    -days 1000
+  - x509 형식의 인증서를 발급
+
+  - `- req` : CSR 파일을 입력으로 사용한다는 것을 명시할 때 사용하는 옵션
+  - `-in apiserver.csr`: 입력 파일로 사용할 CSR파일을 지정
+  - `-CA`,`-CAkey`: CA공개인증서와 키를 지정
+  - `-CAcreateserial` : CA인증서와 함께 사용할 일련번호 파일을 생성. 기본적으로 ca.srl 파일이 생성되고 이후 발급되는 모든 인증서에 고유한 일련번호를 부여하고, 이미 일련번호 파일이 존재하면 이를 업데이트를 한다.
+  - `-out` 출력파일 지정
+  - `-days`:  인증서 유효기간 지정 
+
+  3-4. -cert,-key 사용 예시 
+
+  curl --key admin.key --cert admin.crt --cacert ca.crt https://master-node-ip:6443/api/v1/pods
+  - 클라이언트 측에서 마스터 노드에 pods 정보를 요청하는 get 메소드다. 
+  - `-- key`, `--cert`, `--cacert` : 클라이언트의 개인키와 인증서, 그리고 이를 인증할 ca인증서를 지정한다.  
+
+  3-5. api server config 설정
+  ==============================================
+  apiVersion: v1
+  kind: Config
+  clusters:
+  - cluster:
+      certificate-authority: ca.crt
+      server: https://kube-apiserver:6443
+    name: kubernetes
+  users:
+  - name: kubernetes-admin
+    user:
+      client-certificate: admin.crt
+      client-key: admin.key
+  ==============================================
+  - kube-api서버가 안전하게 통신하기 위한 config 파일 설정이다. 
+  - 'kubernetes' 클러스터 콘텍스트 내에서 ca 인증서를 지정(kube api 서버 주소 명시)
+  - 서버에 접근하기 위한 사용자 인증정보를 정의.
+  - 또한 기존 API 서버 설정의 경우 /etc/kubernetes/manifesets/kube-apiserver.yaml에서도 정의가 가능하다.
+  =============================================================
+  spec:
+    containers:
+    - command:
+      - kube-apiserver
+      ...
+      --client-ca-file=/etc/kubernetes/pki/ca.crt
+      --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
+      --tls-private-key-file=/etc/kubernetes/pki/apiserver.key
+      ...
+  =============================================================
+
+3-6. kubeconfig 조회
+- 위 config 파일 설정은 보통 $HOME/.kube/config를 참조한다. 
+
+[kubectl 설정 조회]
+kubectl config view
+===========================================================
+[결과 출력]
+apiVersion: v1
+
+[클러스트 api 서버와 ca 정보]
+clusters:
+- cluster:
+    certificate-authority: /etc/kubernetes/pki/ca.crt
+    server: https://kube-apiserver:6443
+  name: kubernetes
+  
+[관련 컨텍스트 출력]
+contexts:
+- context:
+    cluster: kubernetes
+    user: kubernetes-admin
+    namespace: default
+  name: admin-context
+current-context: admin-context
+kind: Config
+preferences: {}
+
+[유저의 정보 출력]
+users:
+- name: kubernetes-admin
+  user:
+    client-certificate: /etc/kubernetes/pki/admin.crt
+    client-key: /etc/kubernetes/pki/admin.key
+===========================================================
+
+- 또한 특정 파일을 명시적으로 지정하여 정보를 도출할 수 있다. 
+kubectl --kubeconfig=/path/to/kube-config.yaml get pods
+
+[환경변수를 명시적으로 설정할 수도 있다.]
+export KUBECONFIG=/path/to/kube-config.yaml
+kubectl get pods
+ 
+[kubeconfig 파일과 인증서, 키의 적절한 권한을 설정해야 한다. ]
+
+chmod 600 kube-config.yaml admin.key admin.crt ca.crt
+ 
+3-7 etcd 설정 
+- etcd
+  - --advertise-client-urls=https://127.0.0.1:2379
+  - --key-file=/path-to-certs/etcdserver.key
+  - --cert-file=/path-to-certs/etcdserver.crt
+  - --client-cert-auth=true
+  - --data-dir=/var/lib/etcd
+  - --initial-advertise-peer-urls=https://127.0.0.1:2380
+  - --initial-cluster=master=https://127.0.0.1:2380
+  - --listen-client-urls=https://127.0.0.1:2379
+  - --listen-peer-urls=https://127.0.0.1:2380
+  - --name=master
+  - --peer-cert-file=/path-to-certs/etcdpeer1.crt
+  - --peer-client-cert-auth=true
+  - --peer-key-file=/etc/kubernetes/pki/etcd/peer.key
+  - --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+  - --snapshot-count=10000
+  - --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+
+  - advertise-client-urls : 클라이언트가 서버와 통신하기 위해 사용할 URL을 알림 (여기서는 로컬호스트 2379 포트에 etcd 요청을 처리한다.)
+  - --key-file, --cert-file, --trusted-ca-file : 개인 키와 인증서 파일, ca인증서 경로를 설정한다. 
+  - `/path-to-certs` : etcd.yaml 파일에서 인증서와 키 파일의 경로를 나타내는 플레이스 홀더로, 실제 환경에서는 사용자가 지정한 경로(etcd. yaml에서)로 대체된다.
+
+  [etcd.yaml]
+  - --key-file=/custom/certs/etcd/server.key
+  - --cert-file=/custom/certs/etcd/server.crt
+  - --peer-cert-file=/custom/certs/etcd/peer.crt
+  - --peer-key-file=/custom/certs/etcd/peer.key
+  - --trusted-ca-file=/custom/certs/etcd/ca.crt
+  - --peer-trusted-ca-file=/custom/certs/etcd/ca.crt
+
+  여기서 이렇게 설정이 되면, path-to-certs가 설정된다.
+  - `client-cert-auth` 클라이언트 인증서를 통해 클라이언트 인증 여부를 설정한다. 'true'가 설정이 되면, etcd에 접근할 때, 클라이언트 인증이 요구된다. 
+  -`--data-dir`: etcd 데이터(스냅숏 및 로그)를 저장하는 디렉터리를 지정한다. 지정된 디렉터리에 데이터를 저장.
+  - `--initial-advertise-peer-urls`: 다른 etcd 피어노드와 통신하기 위한 광고 URL을 지정. 
+  - `--listen-client-urls`:etcd가 클라이언트 요청을 수신할 url
+  -`--listen-peer-urls`; etcd가 다른 피어노드와 통신할 url
+  -`--name`: etcd노드의 이름을 설정
+  -`--peer-cert--file`,`--peer-client-cert-auth`,`--peer-key-file`, `--peer-trusted-ca-file`: 피어 노드와 통신하기 위한 CA인증서, 인증서, 인증여부, 키파일등을 설정한다. 
+  -`--snapshot-count` 몇 개의 트랜잭션이 발생한 후에 스냅숏을 생성할지 결정
+
+  3-8. kube-apiserver 설정
+  - /etc/systemd/system/kube-apiserver.service에 있는 service를 수정해서 업데이트하는 법도 있지만, /etc/kubernetes/manifest/kube-api-server.yaml에서 수정도 가능하다. (yaml파일 수정이 보다 쉽게 할 수 있다)
+
+  ExecStart=/usr/local/bin/kube-apiserver \
+    --advertise-address=${INTERNAL_IP} \
+    --allow-privileged=true \
+    --apiserver-count=3 \
+    --authorization-mode=Node,RBAC \
+    --bind-address=0.0.0.0 \
+    --enable-swagger-ui=true \
+    --etcd-cafile=/var/lib/kubernetes/ca.pem \
+    --etcd-certfile=/var/lib/kubernetes/apiserver-etcd-client.crt \
+    --etcd-keyfile=/var/lib/kubernetes/apiserver-etcd-client.key \
+    --etcd-servers=https://127.0.0.1:2379 \
+    --event-ttl=1h \
+    --kubelet-certificate-authority=/var/lib/kubernetes/ca.pem \
+    --kubelet-client-certificate=/var/lib/kubernetes/apiserver-etcd-client.crt \
+    --kubelet-client-key=/var/lib/kubernetes/apiserver-etcd-client.key \
+    --kubelet-https=true \
+    --runtime-config=api/all \
+    --service-account-key-file=/var/lib/kubernetes/service-account.pem \
+    --service-cluster-ip-range=10.32.0.0/24 \
+    --service-node-port-range=30000-32767 \
+    --client-ca-file=/var/lib/kubernetes/ca.pem \
+    --tls-cert-file=/var/lib/kubernetes/apiserver.crt \
+    --tls-private-key-file=/var/lib/kubernetes/apiserver.key
+
+  - `--advertise-address`: API서버가 광고할 IP주소
+  -`--service-cluster-ip-range=`: kubernetest 서비스에 할당할 클러스터 IP범위 
+  -`--service-node-port-range=`: nodeport서비스에 사용할 포트범위
+  -`--etcd-cafile`, `--etcd-certfile`,`--etcd-keyfile` : etcd와 통신 시 사용할 CA인증서, 인증서, 개인키 설정
+  -`kubelet-certificate-authority`, `kubelet-client-certificate`, `kubelet-client-key`: kubelet을 인증할 CA 인증서와 통신 시 이용할 인증서, 키 
+  - `--client-ca-file`:클라이언트 인증서를 검증하기 위한 CA 인증서 경로
+  -  `--tls-cert-file=`, `--tls-private-key-file=`: API서버의 HTTPS 통신을 위한 공개 인증서와 개인키 경로
+  - `--service-account-key-file` : 서비스 계정 토큰 인증을 위한 개인 기 파일 경로
+  - `--runtime-config=api/all`: 모든 쿠버네티스 API 리소스 활성화
+  -`--event-ttl=1h`: 이벤트 데이터를 저장하는 기간을 1시간으로 지정
+  - `--allow-priviledged=true`: priviledged 컨테이너(디버깅 및 특정 워크로드에 사용될) 실행 허용
+
+  3-9. kubelet-config 설정
+  [kubelet.yaml]
+  =======================================================
+  kind: KubeletConfiguration
+  apiVersion: kubelet.config.k8s.io/v1beta1
+  address: 0.0.0.0
+  port: 10250
+  authentication:
+    x509:
+      clientCAFile: /etc/kubernetes/pki/ca.crt
+    webhook:
+      enabled: true
+    anonymous:
+      enabled: false
+  authorization:
+    mode: Webhook
+  clusterDNS:
+  - 10.96.0.10
+  clusterDomain: cluster.local
+  tlsCertFile: /var/lib/kubelet/kubelet.crt
+  tlsPrivateKeyFile: /var/lib/kubelet/kubelet.key
+  rotateCertificates: true
+  serverTLSBootstrap: true
+  =======================================================
+  - address/port: kubelet이 요청할 수신할 IP 주소를 지정하는데, 0.0.0.0으로 모든 네트워크에서 요청을 수신한다. 그리고 10250 포트에서 요청을 받는다. 
+  - Authentication: 클라이언트 인증서를 검증하기 위한 CA 인증서를 지정한다. 그리고 webhook과 익명접근여부를 확인한다
+  - Authorization:  권한 부여 방식을 webhook방식으로 지정하여, 외부 webhook서버 호출하여 권한부여를 결정 
+
+  --> 외부에 webhook서비스에서 설정된 규칙에 따라 권한을 부여. API서버에서 webhook서비스와 연동한다.
+  
+  kube-apiserver \
+    --authorization-mode=Node,RBAC,Webhook \
+    --authorization-webhook-config-file=/etc/kubernetes/webhook-config.yaml
+    
+  [webhook-config.yaml]
+  ============================================================================
+  apiVersion: v1
+  kind: Config
+  clusters:
+  - name: my-webhook
+    cluster:
+      server: https://webhook-server.example.com/authorize
+      certificate-authority: /path/to/ca.crt
+  users:
+  - name: webhook-user
+    user:
+      client-certificate: /path/to/client.crt
+      client-key: /path/to/client.key
+  contexts:
+  - name: webhook-context
+    context:
+      cluster: my-webhook
+      user: webhook-user
+  current-context: webhook-context
+
+  ##webhook 요청
+  {
+    "apiVersion": "authorization.k8s.io/v1",
+    "kind": "SubjectAccessReview",
+    "spec": {
+      "user": "jane",
+      "groups": ["developers"],
+      "resourceAttributes": {
+        "namespace": "default",
+        "verb": "create",
+        "resource": "pods"
+      }
+    }
+  }
+
+  ## 수락시 webhook 반응
+  {
+    "apiVersion": "authorization.k8s.io/v1",
+    "kind": "SubjectAccessReview",
+    "status": {
+      "allowed": true,
+      "reason": "User is authorized to create pods in this namespace."
+    }
+  }
+============================================================================
+- clusterDNS, clusterDomain: 클러스터 내부 DNS 서버의 IP주소와 내부 도메인 이름을 설정한다
+- tlsCertFile, tlsPrivateKeyFile: HTTP 통신 시 사용할 인증서, 개인키 경로를 설정한다.  
+- rotateCertificates: 만료인증서 자동 갱신여부
+- serverTLSBootstrap: kubelet이 API서버로부터 TLS 인증서를 부트스트랩하도록 허용.. 즉 일일이 kubelet에 필요한 인증서를 수동으로 생성하면 비효율적이므로, 부트스트랩 토큰을 사용해서 API서버를 통해 자동으로 인증서를 발급받도록 하는 기능
+
+3-10. 인증서 조회
+- cat /etc/kubernetes/manifest에 있는 각종 kube-apiserver, etcd 등의 설정을 확인해서 안에 등록된 인증서 위치를 확인한다.
+- openssl 명령어를 확인해서 인증서에 대한 세부 정보를 확인한다.
+
+[인증서 세부 확인]
+openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout
+
+[출력 정보]
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            01:23:45:67:89:ab:cd:ef
+    Signature Algorithm: sha256WithRSAEncryption
+        Issuer: CN=Kubernetes CA
+        Validity
+            Not Before: Jan  1 00:00:00 2023 GMT
+            Not After : Dec 31 23:59:59 2023 GMT
+        Subject: CN=kube-apiserver
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:b1:c6:a7:f1:e9:b7:c6...
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Basic Constraints:
+                CA:FALSE
+            X509v3 Key Usage:
+                Digital Signature, Key Encipherment
+            X509v3 Subject Alternative Name:
+                DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local
