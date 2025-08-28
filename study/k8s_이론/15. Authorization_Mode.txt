@@ -1,0 +1,310 @@
+참고: https://sjw1995628.tistory.com/9
+
+##Authorization Mode
+
+1. Authorization Mode란?
+
+  1-1. 정의
+  - Kubernetes API 서버는 클라이언트 요청 처리하기 전에 인증과 권한 부여를 수행 
+  - 클라이언트가 요청한 작업(리소스 생성, 수정, 삭제 등)이 허용되는지 확인
+  - 기본적으로 모든 요청은 거부(Deny by Default). 즉, 명시적으로 허용되지 않은 요청은 차단 --> 여기에 RBAC,ABAC등을 통해 요청을 허용하면 된다. 
+
+
+##주요 Authorization Modes
+
+1. AlwaysAllow
+- 모든 요청을 허용
+- 디버깅이나 테스트 환경에서 주로 사용
+
+2. AlwaysDeny
+- 모든 요청을 거부
+- 테스트 목적으로만 사용(특정 시나리오에서 API 서버접근을 완전히 차단하고 싶을때)
+
+3. ABAC
+
+  3-1. 정의
+  - 속성 기반 접근제어로, JSON형식의 정책파일을 사용하여, 권한을 정의한다. 
+  - 각 정책은 사용자 속성, 리소스 속성, 환경 조건 등을 조합하여 접근권한을 결정 
+  - 요청자의 속성과 요청된 리소스의 속성을 비교하여 요청을 정책파일에 정의된 규칙에 따라 동작을 허용하거나 거부
+  - JSON 파일을 API서버에 전달
+
+  3-2. JSON 파일 구조 
+
+  [json 파일 예시 2개]
+  [
+  #jane이 default 네임스페이스 pods 정보 얻는거 
+    {
+      "apiVersion": "abac.authorization.kubernetes.io/v1",
+      "kind": "Policy",
+      "spec": {
+        "user": "jane",
+        "namespace": "default",
+        "resource": "pods",
+        "verb": "get"
+      }
+    },
+  #jane에게 무제한 권한 허용 
+    {
+      "apiVersion": "abac.authorization.kubernetes.io/v1",
+      "kind": "Policy",
+      "spec": {
+        "user": "jane",
+        "namespace": "*",
+        "resource": "*",
+        "verb": "*"
+      }
+    }
+  ]
+ 
+  - apiversion : 정책파일의 API 버전 명시, abac의 경우 `abac.authorization.kubernetes.io/v1`
+  - kind : 리소스 유형 `policy`
+  - user : 요청을 보낸 사용자 이름
+  - namespace : 요청한 리소스가 속한 네임스페이스 
+  - resource : 요청된 리소스 유형 (pods, services 등)
+  - verb :요청된 동작(get,list,create,delete 등)
+
+  3-3. ABAC 설정 방법
+  - 정책파일 작성한 뒤 API 서버에 플래그 추가 
+
+  kube-apiserver \
+    --authorization-mode=ABAC \
+    --authorization-policy-file=/path/to/policy.json
+
+  3-4. ABAC의 작동방식
+  - 클라이언트가 Kubernetes API 서버에 요청을 보냄
+  - API 서버는 요청자의 인증정보를 확인(클라이언트 인증서, 토큰)
+  - ABAC정책 파일에서 요청자의 속성과 요청된 리소스/동작이 일치하는 규칙이 있는지 확인한 뒤 요청 허용 및 거부 
+
+4. RBAC
+
+  4-1. 정의
+  - 쿠버네티스에서 사용가 클러스터 리소스에 대해 수행할 수 있는 작업을 제어하기 위한 권한 부여 메커니즘으로 역할에 접근 권한을 부여하여 최소권한원칙을 구현 
+
+  4-2. Role
+  - 특정 네임스페이스 내에서 리소스에 대한 권한을 정의
+  - Role은 네임스페이스에 종속적이며, 해당 네임스페이스에서만 권한이 적용
+
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    name: pod-reader
+    namespace: default
+  rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups : 리소스가 속한 API Group (ex: `""`는 Coregroup을 의미)
+  - resources : 권한을 적용할 리소스 유형 (ex: Pods)
+  - verbs : 허용된 동작 (ex : get,list,watch)
+
+  4-3. ClusterRole
+  - 클러스터 전체에서 리소스에 대한 권한을 정의
+  - 네임스페이스에 종속되지 않으며, 클러스터 수준 리소스나 모든 네임스페이스에 적용되는 권한을 정의할 때 사용.
+
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    name: cluster-admin
+  rules:
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["*"]
+
+  - 클러스터 전체에 모든 리소스와 동작 허용 
+
+  4-4. RoleBinding
+  - 특정 네임스페이스 내에서 사용자 또는 그룹에게 Role을 연결
+  - RoleBinding은 Role과 사용자/그룹 간의 연결 정의 
+
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: read-pods-binding
+    namespace: default
+  subjects:
+  - kind: User
+    name: jane
+    apiGroup: ""
+  roleRef:
+    kind: Role
+    name: pod-reader
+    apiGroup: rbac.authorization.k8s.io
+
+  - subjects: role이 할당될 사용자, 그룹 또는 서비스 계정을 지정
+  - roleRef :연결할 Role 지정
+
+  4-5. ClusterRoleBinding
+  - ClusterRole과 사용자/그룹을 연결
+  - 클러스터 전체에서 권한을 부여 
+
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    name: cluster-admin-binding
+  subjects:
+  - kind: User
+    name: admin
+    apiGroup: ""
+  roleRef:
+    kind: ClusterRole
+    name: cluster-admin
+    apiGroup: rbac.authorization.k8s.io
+    
+  [cluster-admin]
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    name: cluster-admin
+  rules:
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["*"]
+  - admin에게 cluster-admin(무제한권한) 역할을 부여한다.
+
+  4-6. RBAC 설정예제(특정 네임스페이스에서 Pods조회 권한 부여)
+  - Role(role.yaml) 생성
+
+  [role.yaml]
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    name: pod-reader
+    namespace: default
+  rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - RoleBinding(rolebinding.yaml) 생성
+
+  [rolebinding.yaml]
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: read-pods-binding
+    namespace: default
+  subjects:
+  - kind: User
+    name: jane # 사용자 이름 (대소문자 구분)
+    apiGroup: ""
+  roleRef:
+    kind: Role # 연결할 Role의 종류 (Role 또는 ClusterRole)
+    name: pod-reader # 연결할 Role 이름
+    apiGroup: rbac.authorization.k8s.io
+
+  - 적용 명령어 실행
+  kubectl apply -f role.yaml
+  kubectl apply -f rolebinding.yaml
+
+  4-7. RBAC ABAC 비교 
+  - 정책 관리 : RBAC의 경우, Kubernetes API를 통해 동적으로 관리한다. 하지만, ABAC의 경우, 정책 변경시 API 서버 재시작이 필요하며 정적으로 JSON을 변경하여 갱신이 필요
+  - ABAC는 현재 거의 사용되지 않고, RBAC가 더 많이 사용된다.
+
+  4-8. RBAC 조회
+  [role 조회]
+  kubectl get roles
+
+  [rolebinding 조회]
+  kubectl get rolebinding
+
+
+5. Node Authorization
+- 노드(kubelet)이 수행할 수 있는 작업을 제한하기 위해 설계
+
+  5-1. 역할
+  - kubelet이 자신이 관리하는 리소스에만 접근할 수 있도록 보장 
+
+  5-2. 동작방식
+  - kubelet이 API서버에 요청을 보낸다. 
+  - API서버는 요청의 인증정보를 확인하고, 요청이 노드와 관련된 리소스인지 노드이름을 기반으로 평가
+  - 요청이 노드와 관련된 리소스라면 허용되고, 그렇지 않으면 거부 
+
+  5-3. 예시
+  - 노드 `node-1`의 kubelet이 `node-1`에 속하는 Pod 혹은 다른 리소스에 접근할려고 하면 허용된다. 
+  - 하지만, `node-2`의 Pod요청을 하게 된다면 거부된다. (HTTP 403  Forbidden)
+
+  5-4. 설정방법
+
+  [RBAC와 같은 다른 Authorization과 연동되어 사용가능하다.]
+
+  kube-apiserver \
+    --authorization-mode=Node,RBAC \
+    --enable-admission-plugins=NodeRestriction
+
+  - enable-admission-plugins=NodeRestriction 함으로써, kubelet이 플러그인을 통해 자신의 노드 이름으로 요청을 보내는 것을 강제할 수 있다. 
+  - RBAC,ABAC와 같이 별도의 yaml,json파일을 요구하지 않는다. 
+
+
+6. Webhook Authorization
+
+  6-1. 정의
+  - 외부 HTTP 서비스를 호출하여 권한 부여 결정을 위임
+  - 해당 외부 HTTP 서비스 에서 미리 정책 구현이 요구된다.
+
+  6-2. 구성
+  - Webhook 서버를 구성하고, API서버가 이를 호출하도록 설정 
+
+  [webhook-config.yaml]
+  apiVersion: v1
+  kind: Config
+  clusters:
+    - name: webhook-authz
+      cluster:
+      ##외부 webhook과 연동 
+        server: https://webhook-server.example.com/authorize
+        certificate-authority: /path/to/ca.crt
+  users:
+    - name: webhook-user
+      user:
+        client-certificate: /path/to/client.crt
+        client-key: /path/to/client.key
+  contexts:
+    - context:
+        cluster: webhook-authz
+        user: webhook-user
+      name: webhook-context
+  current-context: webhook-context
+
+  [api 서버에 yaml file 연동 ]
+  kube-apiserver \
+  --authorization-mode=RBAC,Node \
+  --authorization-policy-file=/path/to/policy.json \
+  --authorization-webhook-config-file=/path/to/webhook-config.yaml
+
+
+7. 다중 모드 설정 
+
+kube-apiserver \
+--authorization-mode=RBAC,Node \
+
+- 위와 같이 여러 Authorization Mode가 설정된 경우,  순서대로 평가된다 .
+- 첫번째로 요청을 승인하거나 거부하는 모드에서 결론이 나면 나머지는 평가되지않음 
+
+
+##Check Access
+
+1. Kubectl auth can-i
+
+  1-1. 정의
+  - 쿠버네티스에서 사용자가 특정 작업(리소스 생성, 조회, 삭제 등)을 수행할 수 있는 권한이 있는지 평가
+
+  1-2. 기본  사용법
+  kubectl auth can-i <verb> <resource> [--namespace=<namespace>] [--as=<user>]
+
+  - verb: 수행하려는 작업(get, list, create, delete) 
+  - resource: 작업 대상 리소스 
+  - 네임스페이스: 네임스페이스 지정(기본값을 현재 컨텍스트의 네임스페이스.)
+
+  1-3. 현재 사용자 권한 확인 
+  kubectl auth can-i create deployments --namespace=dev
+
+  [결과(접근가능)]
+  yes
+
+  [결과(접근불가)]
+  no
+  - dev 네임스페이스에서 deployment 생성가능 여부
+
+  1-4. 다른 사용자 권한 확인
+  kubectl auth can-i list secrets --namespace=default --as=jane
+  - jane 사용자가 secret 조회 가능한지 여부 확인
