@@ -1,0 +1,275 @@
+##참고: https://sjw1995628.tistory.com/11
+
+##볼륨
+
+1. 컨테이너와 Pod 의 특성
+- Docker 컨테이너와 쿠버네티스 파드는 일시적으로 설계되었습니다. 작업 완료 후 삭제 되며, 내부데이터도 함께 사라짐
+- Kubernetes의 파드도 일시적이며, 파드가 삭제되면 데이터도 삭제됨 
+
+2. 쿠버네티스에서 볼륨 사용
+- 쿠버네티스의 파드도 일시적이며 파드가 삭제되면 데이터도 사라짐
+- 따라서 중요한 데이터의 유실을 방지하기 위해 볼륨을 파드에 연결하여 데이터를 외부에 저장하여 데이터를 독립적으로 유지
+
+3. 볼륨 구현 예제 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: random-number-generator
+spec:
+  containers:
+    - image: alpine
+      name: alpine
+      command: ["/bin/sh", "-c"]
+      args: ["shuf -i 0-100 -n 1 >> /opt/number.out;"]
+      volumeMounts:
+        - mountPath: /opt
+          name: data-volume
+  volumes:
+    - name: data-volume
+      hostPath:
+        path: /data
+        type: Directory
+
+  3-1. 개요: 해당 Pod는 랜덤숫자를 생성하고 이를 외부 스토리지(/opt/number.out)에 저장 
+
+  3-2. container
+  - command, args는 컨테이너 시작시 실행할 명령어와 인수를 정의한다. 
+  - command: Bash 셸('sh')을 실행한다.
+  - args: shuf 명령어를 사용해 1~100까지 랜덤 숫자를 생성한 뒤, /opt/number.out 파일에 이어서 저장
+
+  3-3. container-> volumeMounts: 컨테이너 내부에서 볼륨을 마운트할 경로를 정의 
+  - mountPath: /opt : 컨테이너 내부에서 /opt 디렉토리에 볼륨을 마운트
+  - name: 마운트할 볼륨의 이름을 지정하며 아래 volumes 섹션과 연결됨 
+
+  3-4. volumes
+  - Pod에 연결된 외부 스토리지를 정의
+  - 볼륨이름을 통해 volumeMounts.name 과 연결 
+  - hostPath: 호스트 머신의 디렉토리를 볼륨으로 사용하는 옵션으로 호스트 머신의 /data 디렉토리를 볼륨으로 사용
+
+  3-5. 동작과정
+  - Pod 생성 및 난수 생성 후 컨테이너 내부 /opt/number.out 에 저장
+  - 볼륨 마운트로 컨테이너내부의 /opt/number.out 파일은 실제로 호스트 머신의 /data/number.out에 저장(volumes.hostpath)
+
+ 
+##Persistent Volume 
+
+1. 개념 
+
+  1-1. 기존 Volume의 한계 
+  - 일반적인 볼륨은 Pod 정의파일에 직접 설정 
+  - 많은 사용자가 여러 파드를 배포하는 대규모 환경에서는 각 파드마다 스토리지 구성을 반복해야 하며, 변경시 모든 정의파일을 수정필요
+
+  1-2. PV의 도입
+  - PV: 클러스터 전체에서 사용 가능한 스토리지 풀(쿠버네티스 클러스터 전역적으로 조회)로, 관리자가 미리 설정 
+  - 개발자는 PVC(Persistent Volume Claim)을 통해 필요한 스토리지를 요청하여 사용 가능 
+  - 이를 통해 스토리지 중앙 집중 관리하고 사용자와 관리자 간의 역할을 분리 가능 
+
+2. Persistent Volume의 주요 구성 요소 
+
+  2-1. Access Mode(접근모드)
+  - PV가 클러스터 내에서 어떻게 사용될 수 있는지 정의 
+  - ReadWriteOnce(RWO): 단일 노드에서 읽기/쓰기 가능
+  - ReadOnlyMany(ROX): 여러 노드에서 읽기만 가능 
+  - ReadWriteMany(RMX): 여러 노드에서 읽기/쓰기 가능 
+
+  2-2. Capacity(용량): PV에 할당된 스토리지 크기를 정의(예: 1Gi)
+
+  2-3. Volume Type(볼륨 유형):
+  - PV가 사용하는 스토리지 백엔드를 지정 
+  - 예: hostpath(로컬디렉토리), AWS Elastic Block Store, NFS등 설정 가능 
+
+  2-4. Reclaim Policy
+  - 재사용 정책으로 PVC가 삭제된 후 PV를 어떻게 처리할지 결정 
+  - Retain: 데이터를 유지하며 관리자가 수동으로 삭제 
+  - Delete: PVC삭제 시 PV도 자동으로 삭제
+  - Recycle: 초기화 후 재사용 가능 
+
+3. 예시 
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-vol1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 1Gi
+  hostPath:
+    path: /tmp/data
+
+  3-1. 개요: 단일 노드에서 읽기 쓰기가 가능한 1Gi PV로, 호스트 머신의 /tmp/data에 사용한다.  
+
+  3-2. kind: 리소스 종류를 PersistentVolume으로 설정 
+
+  3-3. spec
+  - accessModes: 접근모드를 단일 노드에서 읽기 쓰기로 설정
+  - capacity.storage: 스토리지 용량 1Gi 설정
+  - hostPath.path: 호스트머신의 tmp/data디렉토리를 사용 
+
+  3-4. PV 생성 및 확인 
+  [PV 생성]
+  kubectl create -f pv-def.yaml
+
+  [PV 확인]
+  kubectl get persistentvolume
+
+  NAME      CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   AGE
+  pv-vol1   1Gi        RWO            Retain           Available           standard       5m
+
+
+##PVC(Persistent Volume Claim)
+
+1. 정의: 사용자가 필요한 스토리지를 요청하는 객체로, 특정요구사항(용량,접근모드 등)에 맞는 PV를 자동으로 바인딩
+- PV가 클러스터 범위에서 관리되지만, PVC는 네임스페이스 범위에서 관리됨
+
+  1-1. PVC의 역할: 
+  - 사용자는 PVC를 통해 필요한 스토리지 용량, 접근모드, 스토리지 클래스를 정의 
+  - PVC에 적힌 요청 조건에 PV를 쿠버네티스에서 자동으로 검색하고 바인딩 
+
+2. PVC와 PV의 바인딩 과정 
+  2-1. PVC생성:
+  - 사용자가 PVC를 생성하면 쿠버네티스가 PVC의 요청조건(용량, 접근모드 등)에 맞는 PV를 검색 
+
+  2-2. 조건일치 확인:
+  - 요청된 스토리지 용량, 접근 모드, 스토리지 클래스, 기타설정(라벨 셀렉터)에 기반하여 PV를 확인
+
+  2-3. 바인딩:
+  - 조건에 맞는 PV가 있다면, PVC와 PV가 자동으로 바인딩 
+  - 한번 바인딩되면 다른 PVC가 해당 PV를 사용할 수 없음 
+
+  2-4. Pending 상태:
+  - 조건에 맞는 PV가 없으면 PVC는 pending상태가 된다. 
+  - 새로운 PV가 생성되면 쿠버네티스가 자동으로 PVC와 바인딩 
+
+3. 예제
+
+  3-1. 예제1: 단일노드 읽기 쓰기 허용 및 500Mi 용량인 PV를 요청하는 PVC 
+
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: myclaim
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 500Mi
+
+  3-2. 예제2: 특정 Label(이 경우 type: fast-storage)을 갖고있는 PV를 요청하는 PVC
+
+  [PVC]
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: myclaim
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 500Mi
+    selector:
+      matchLabels:
+        type: fast-storage
+      
+  [매칭되는 PV]
+  apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    name: my-pv
+    labels:
+      type: fast-storage
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    capacity:
+      storage: 1Gi
+    hostPath:
+      path: /tmp/data
+ 
+
+4. PVC생성 및 확인 
+
+[PVC 생성]
+kubectl create -f pvc-definition.yaml
+
+[PVC 상태 확인]
+kubectl create -f pvc-definition.yaml
+
+NAME      STATUS    VOLUME    CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+myclaim   Bound     pv-vol1   1Gi        RWO            standard       5m
+
+- 해당 결과 PVC와 PV가 성공적으로 바인딩(STATUS: Bound) 실패시, Pending이 뜬다.
+ 
+
+5. 재사용 정책 
+
+  5-1. persistentVolumeReclaimPolicy: PVC가 삭제된 후 PV의 처리 방식 결정  
+
+  5-2. Retain(default 값)
+  -  데이터와 PV가 유지 
+  -  관리자가 수동으로 데이터를 삭제하거나 재사용
+
+  5-3. Delete:
+  - PVC삭제 시 PV도 자동 삭제 
+
+  5-4. Recycle
+  - 데이터가 초기화된 후 다른 PVC에서 재사용 가능 
+
+ 
+
+6. Pod에서 PVC바로 사용하는 방법 
+- volumes에 persistentVolumeClaim에 덧붙이면 된다.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx
+      volumeMounts:
+      - mountPath: "/var/www/html"
+        name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: myclaim
+ 
+
+##스토리지 클래스
+
+1. 정의: 동적으로 스토리지를 프로비저닝하기 위한 쿠버네티스 리소스 
+
+2. 정적 vs 동적 프로비저닝
+
+  2-1. 정적프로비저닝의 한계
+  - 클라우드에서 수동으로 디스크 생성 필요
+  - PV를 수동으로 정의해야함
+  - 관리 overhead
+
+  2-2. 동적 프로비저닝의 장점
+  - 자동 스토리지 프로비저닝
+  - PV 자동 생성
+  - 관리 작업 감소 
+
+3. 사용
+- StorageClass 정의 
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard
+provisioner: kubernetes.io/gce-pd
+parameters:
+  type: pd-standard
+  replication-type: none
+
+- provisioner : google cloud platform의 persistent disk를 프로비저너로 사용 
+- parameters: 프로비저너의 세부 설정을 한다. 
+- type: pd-standard: 표준 퍼시스턴트 디스크 사용
+- replication-type: 복제 설정없음 
