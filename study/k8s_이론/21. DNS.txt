@@ -1,0 +1,64 @@
+##참고: https://sjw1995628.tistory.com/15
+
+##Core DNS
+
+1. 정의
+- 쿠버네티스 클러스터에서 DNS 역할을 수행하는 기본 DNS서버로, 쿠버네티스는 클러스터 내부에서 Pod와 서비스 간의 통신을 윟나 이름 해석을 제공하기 위해 CoreDNS을 사용 
+- 플러그인 기반 아키텍처로 설계되어 있으며, 유연하고 확장 가능한 DNS 솔루션 
+
+
+2. 주요 역할
+
+    2-1. Pod와 서비스의 이름 해석
+    - Pod와 서비스는 IP 주소 대신 이름으로 서로를 참조 가능 
+
+    2-1. 클러스터 내부 DNS 관리
+    - 클러스터 내에서 생성된 서비스와 Pod에 대해 자동으로 DNS 레코드를 생성 
+    - ClusterIP, NodePort, LoadBalancer 등 모든 서비스 유형에 대해 DNS를 제공 
+
+    2-3. 확장성과 유연성:
+    - 플러그인 기반 구조로 다양한 기능(캐싱, 로깅, 외부 DNS 포워딩 등)을 쉽게 추가
+
+    2-4. Pod-to-Service, Pod-to-Pod 통신을 서비스 이름으로 가능하게 함.
+
+
+3. 작동 방식
+
+    3-1. 서비스, Pod FQDN 할당 및 Resolve
+    - 쿠버네티스에서 서비스가 생성되면 CoreDNS는 해당 서비스에 대한 DNS 레코드를 생성 
+    (ex) web-service라는 이름의 서비스가  생성되면 FQDN('web-service.default.svc.cluster.local')이 자동으로 할당된다.
+    (ex) pod의 경우도 유사하다. pod 에 대한 FQDN('[POD-IP].default.pod.cluster.local')이 자동으로 할당된다. POD의 경우 호스트 네임이 POD 이름이 아닌 IP로 대신한다. 10.244.19.5 -> 10-244-19-5.default.pod.cluster.local
+    - 그리고 해당 DNS에 대한 쿼리에 대해 IP로 resolve 해준다. 
+
+
+4. CoreDNS 구성 파일
+- CoreDNS는 ConfigMap을 통해 설정 
+kubectl -n kube-system describe configmap coredns
+[출력]
+.:53 {
+    errors
+    health
+    kubernetes cluster.local in-addr.arpa ip6.arpa {
+        pods insecure
+        fallthrough in-addr.arpa ip6.arpa
+    }
+    prometheus :9153
+    forward . /etc/resolv.conf
+    cache 30
+    loop
+    reload
+    loadbalance
+}
+- forward: 클러스터 외부의 DNS 요청을 외부 DNS 서버로 전달(/etc/resolv.conf 네임서버 참조)
+
+
+5. CoreDNS 실행 확인
+
+    5-1. 프로세스 확인 
+    kubectl get pods -n kube-system -l k8s-app=kube-dns
+    [출력예시]
+    NAME                        READY   STATUS    RESTARTS   AGE
+    coredns-558bd4d5db-l6s9x    1/1     Running   0          10m
+
+    5-1. DNS resolve 확인
+    kubectl exec <pod-name> -- nslookup web-service.default.svc.cluster.local
