@@ -1,0 +1,168 @@
+##참고: https://sjw1995628.tistory.com/16
+
+##Ingress
+
+1. 정의
+- Ingress: 쿠버네티스 클러스터 내부의 여러 서비스를 외부로 노출하기 위한 단일 진입점 역할
+- 각 서비스 마다 개별적으로 LoadBalance, NodePort를 사용하는 번거로움을 줄임 
+- 도메인 기반 가상 호스팅: 하나의 Ingress를 통해 여러 도메인 이름(app1.example.com, app2.example.com)으로 트래픽 처리 가능 
+
+
+2. 구성요소 
+
+    2-1. Ingress 리소스 
+    - 외부 트래픽을 클러스터 내부 서비스로 라우팅하기 위한 규칙을 정의하는 객체
+    - 호스트 이름과 URL경로를 기반으로 트래픽을 특정 서비스와 포트로 전달하는 규칙을 담고 있다.
+
+    2-2. Ingress 컨트롤러
+    - Ingress 리소스의 규칙을 구현하는 특수한 로드밸런서 
+    - 대표적인 Ingress 컨트롤러: NGINX, Traefik, HAProxy, GCE 등 
+
+
+3. Ingress의 작동 방식
+
+    3-1. 외부요청이 Ingress 컨트롤러에 전달 
+
+    3-2. Ingress 컨트롤러는 Ingress 리소스에 정의된 규칙에 따라 요청을 적절한 쿠버네티스 서비스로 라우팅
+
+    3-3. 서비스는 요청을 연결된 Pod중 하나로 전달 
+
+
+4. 기능 
+
+    4-1. 트래픽 라우팅
+    - Ingress 리소스에 정의된 규칙에 따라 들어오는 요청이 특정 백엔드 서비스로 전달
+    - 리소스 규칙에 해당 라우팅 규칙들이 정의되되어 있다. 
+
+    4-2. SSL 종료
+    - Ingress는 SSL/TLS 인증서를 처리하여 HTTPS 연결을 지원
+
+    4-3. 로드밸런싱
+    - 여러 Pod에 걸쳐 트래픽을 분산 
+
+
+5. 서비스(NodePort/LoadBalancer)와 Ingress 비교
+======================================================================================
+기능	        서비스(NodePort/LoadBalancer)         Ingress
+목적	        개별 서비스를 외부에 노출                여러 서비스에 대한 중앙화된 접근 관리
+라우팅 기능	     제한적(IP 및 포트 기반)	             고급 기능(호스트/경로 기반 라우팅)
+SSL 지원	    기본 제공되지 않음	                    지원
+비용 효율성	     다수의 LoadBalancer 필요	            단일 LoadBalancer
+작동 계층	     Layer4 (TCP/UDP)	                  Layer 7(HTTP/HTTPS)
+======================================================================================
+
+
+6. Ingress 장점
+
+    6-1. 중앙화된 관리: 여러 서비스의 라우팅 규칙을 하나의 리소스로 통합 관리 
+
+    6-2. 비용 효율성: 다수의 클라우드 로드 밸런서를 사용하는 대신 단일 로드밸런서 사용
+
+    6-3. 고급 기능 제공: SSL 종료 및 호스트/경로 기반 라우팅 지원 
+
+    6-4. 확장성: 대규모 트래픽 처리 및 다중 서비스 지원 
+
+ 
+7. Ingress 설정방법 
+
+    7-1. Ingress Class 정의
+    - Ingress Controller와 Ingress 리소스를 연동하기 위해 사용 
+    - 물론 컨트롤러나 Ingress 내에서 Class를 명시하지 않는다면 default로 설정되어 default 인 ingress class끼리 연동이 되지만, 관리를 위해 ingress class 를 따로 정의한다. 
+    =============================================================================
+    apiVersion: networking.k8s.io/v1
+    kind: IngressClass
+    metadata:
+      name: nginx
+    ##  annotations:
+    ##    ingressclass.kubernetes.io/is-default-class: "true" # 기본 클래스 설정
+    spec:
+    controller: k8s.io/ingress-nginx # NGINX Ingress Controller를 지정
+    =============================================================================
+    - annotations: nginx 라는 ingressClass를 기본 클래스로서 정의할 수 있다.. 지금 예제에서는 사용 예시를 보여주기 위해 주석처리함   
+
+    7-2. Ingress 컨트롤러 배포 
+    =======================================================================================
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nginx-ingress-controller
+    spec:
+      replicas: 1
+    selector:
+        matchLabels:
+          app: nginx-ingress
+    template:
+        metadata:
+          labels:
+            app: nginx-ingress
+        spec:
+          containers:
+          - name: nginx-ingress-controller
+            image: quay.io/kubernetes-ingress-controller/nginx-ingress-controller:0.21.0
+            args:
+            - /nginx-ingress-controller
+            - --controller-class=k8s.io/nginx
+            ports:
+            - name: http
+              containerPort: 80
+            - name: https
+              containerPort: 443
+    =======================================================================================
+    - apiVersion, kind: apps/v1으로 Deployment 유형을 사용한다. 
+    - HTTP와 HTTPS 포트를 처리하도록 설정되어야 하지만, 외부에 노출이 되지 않아 서비스 처리가 불가하다. 
+    - --controller-class를 통해 특정 클래스를 지정한다. 
+    - ingressclass가 하나인 경우, nginx ingressclass의 spec.controller에서 nginx와 연동됨이 명시되어 있음으로, ingress controller에서 ingress class를 지정하지 않아도, 쿠버네티스에서 기본적으로 ingress 컨트롤러가 자동적으로 ingress 리소스와 연동된다. 
+
+    7-3. Ingress Controller Service
+    ==================================
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: nginx-ingress-service
+    spec:
+      type: NodePort
+      ports:
+      - port: 80
+        targetPort: 80
+        protocol: TCP
+        name: http
+      - port: 443
+        targetPort: 443
+        protocol: TCP
+        name: https
+      selector:
+        app: nginx-ingress
+    ==================================
+    - NodePort를 사용하여 Ingress Controller를 외부로 노출 
+    - Nodeport에서 HTTP(80), HTTPS(443) 포트를 외부에 노출한다. 
+    - selector에 Deployment의 라벨(app: nginx-ingress)과 연결 
+
+    7-4. Ingress 리소스 
+    ====================================================================
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: example-ingress
+    spec:
+      ingressClassName: nginx # NGINX와 연동하기 위해 클래스 이름 지정.
+      rules:
+      - host: example.com # 요청 호스트 이름 지정 (DNS 설정 필요)
+        http:
+          paths:
+          - path: /app1 # "/app1" 경로로 들어오는 요청 처리 규칙 정의.
+            pathType: Prefix 
+            backend:
+              service:
+                name: app1-service # 해당 경로로 트래픽 전달할 서비스 이름.
+                port:
+                  number: 80 # 서비스 포트 번호 지정.
+        - path: /app2 # "/app2" 경로 처리 규칙 정의.
+            pathType: Prefix 
+            backend:
+              service:
+                name: app2-service # 해당 경로로 트래픽 전달할 서비스 이름.
+                port:
+                  number: 80 # 서비스 포트 번호 지정.
+    ====================================================================
+    - 경로 바탕으로 라우팅 하는 ingress를 만든다. 
+    - ingressClassName을 명시함으로써 nginx ingressclass인 ingress controller 연동된다. 
