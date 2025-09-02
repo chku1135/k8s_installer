@@ -1,0 +1,124 @@
+##참고: https://sjw1995628.tistory.com/31
+
+##이미지 
+- 도커 이미지를 안전하게 관리하는 것도 클러스터 보안의 중요한 부분이다. 
+
+1. 이미지 이름 구조
+- Docker 이미지 이름은 일반적으로 user/repository:tag 형식을 따른다. 
+- nginx:library/nginx에서 비롯되며 library는 Docker Hub의 공식 이미지 저장소를 의미 
+
+
+2. 이미지 저장소 
+- 기본적으로 이미지는 Docker Hub(docker.io)에서 가져오며 gcr.io 구글 컨테이너, Amazon ECR 등에서도 가져올 수 있다. 
+- 보안을 위해서 private 내부 레지스트리를 사용할 수 있다. 
+
+
+3. 프라이빗 레지스트리 사용 
+
+    3-1. 프라이빗 레지스트리에 접근
+    - Docker CLI를 사용하여 프라이빗 레지스트리에 로그인 
+    docker login <registry-url>
+
+    3-2. 프라이빗 이미지 인증을 위한 Secret 객체 생성 
+    kubectl create secret docker-registry regcred \
+    --docker-server=your.private.registry.example.com \
+    --docker-username=<username> \
+    --docker-password=<password> \
+    --docker-email=<email>
+
+    3-3. 쿠버네티스에서 프라이빗 이미지 사용
+    - Pod 정의 파일에서 이미지 경로를 프라이빗 레지스트리의 전체 경로로 지정 
+    [가상의 프라이빗 레지스트리에 저장된 이미지 가정]
+    your.private.registry.example.com/janedoe/jdoe-private:v1
+
+    [Secret을 사용하여 프라이빗 이미지를 사용하는 Pod 정의 파일]
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: private-reg-pod
+    spec:
+      containers:
+      - name: private-reg-container
+        image: your.private.registry.example.com/janedoe/jdoe-private:v1
+        imagePullPolicy: Always
+      imagePullSecrets:
+      - name: regcred
+
+
+##프로세스 격리
+
+1. Namespace를 통한 격리
+
+    1-1. 네임스페이스를 통한 격리 
+    - Docker는 Linux의 네임스페이스를 활용하여 컨테이너를 격리 
+    - 각 컨테이너는 자체 네임스페이스를 가지며, 컨테이너 내부에서 실행되는 프로세스는 해당 네임스페이스 내에서만 보임 
+    - 컨테이너 내부에서 이미지가 실행하면서 생긴 명령어는 실행된 프로세스 PID 1로 표시됨 
+    - 호스트에서는 동일한 프로세스가 다른 PID로 나타남 
+
+    1-2. 호스트와 컨테이너 간 관계
+    - 컨테이너 내부의 모든 프로세스는 실제로 호스트에서 실행 
+    - 하지만 각 컨테이너는 자신의 내임스페이스 내에서만 프로세스 조회 가능 
+
+
+2. 사용자 보안 
+
+    2-1. 기본 사용자 
+    - 기본적으로 Docker컨테이너는 루트 사용자로 실행됨
+    - 보안상 위험할 수 있으므로, 비루트 사용자 실행이 권장됨 
+    - docker run 명령어에서 --user 옵션을 사용하여 특정 사용자 ID로 컨테이너 실행한다.
+    docker run --user 1000 ubuntu sleep 3600
+    - docker 이미지 생성할 때 USER 지시어를 사용하여 기본 사용자를 설정가능 
+
+
+##리눅스 권한 제한
+
+1. 개념
+- 리눅스 시스템에서 루트 사용자는 기본적으로 모든 권한을 가짐
+- 도커는 이러한 권한을 세분화하여 특정 권한만 컨테이너에 부여하거나 제거 가능      
+
+
+2. 기본 동작
+- Docker는 기본적으로 제한된 권한만 부여 
+- 컨테이너 내부의 사용자는 호스트를 부팅하거나 네트워크를 제어하는 작업 수행 불가 
+
+
+3. 권한 추가 제거
+- --cap-add, --cap-drop 옵션으로 권한 부여 및 제거 가능
+  docker run --cap-add=NET_ADMIN ubuntu
+  docker run --cap-drop=NET_RAW ubuntu
+ 
+
+4. Priviledged 모드
+- --priviledged 옵션을 사용하여 모든 권한을 부여받아 호스트와 거의 동일한 수준의 접근권한을 가진다. 
+  docker run --privileged ubuntu
+
+
+##쿠버네티스에서 적용 
+
+1. Security Context는 Pod, 컨테이너 수준에서 보안 관련 설정을 지정한다. 
+- Pod 전체 혹은 개별 컨테이너에 적용할 수 있따. 
+- runAsUser, capabilities 등을 활용하여 보안을 설정할 수 있다.
+- runAsUser: 컨테이너 내에서 프로세스를 실행할 사용자 ID를 지정
+- capabilities: Linux Capabilities를 추가하거나 제거하여 특정 권한을 부여하거나 제한 
+
+
+2. 예시
+================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-pod
+spec:
+[사용자 ID 지정]
+  securityContext:
+    runAsUser: 1000
+  containers:
+  - name: secure-container
+    image: ubuntu
+    command: ["sleep", "3600"]
+    [특정권한 추가]
+    securityContext:
+      capabilities:
+        add: ["NET_ADMIN"]
+        drop: ["MKNOD"]
+================================
