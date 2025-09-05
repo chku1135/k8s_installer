@@ -1,0 +1,68 @@
+##참고: https://sjw1995628.tistory.com/35
+
+##JSONPath
+
+1. JSONPath 사용 이유 
+- 수백개의 노드와 수천개의 파드, 디플로이먼트 등의 리소스 정보를 효율적으로 조회해야 할 때 유용
+- 특정 필드만 선택적으로 출력하거나 원하는 형식으로 데이터를 가공 
+
+
+2. 기본 문법 
+kubectl get <리소스> -o jsonpath='{<JSONPath 표현식>}'
+ 
+
+3. 주요 사용 예시 
+    3-1. 단일 필드 조회 
+        [노드 이름 조회]
+        kubectl get nodes -o jsonpath='{.items[*].metadata.name}'
+        [출력]
+        master worker1 worker2
+
+        [파드 IP 조회 ]
+        kubectl get pods -o jsonpath='{.items[*].status.podIP}'
+        [출력 예시]
+        10.244.0.5 10.244.1.3 10.244.2.7
+
+    3-2. 여러 줄 출력 
+        [range를 사용한 줄바꿈 출력]
+        kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.podIP}{"\n"}{end}'
+        [출력 예시]
+        nginx-pod        10.244.0.5
+        redis-pod        10.244.1.3
+        mysql-pod        10.244.2.7
+
+    3-3. 정렬 기능 
+        [이름순으로 서비스 정렬]
+        kubectl get services --sort-by=.metadata.name
+        [출력 예시]
+        NAME          TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)   AGE
+        kubernetes    ClusterIP   10.96.0.1      <none>        443/TCP   10d
+        nginx-svc     ClusterIP   10.96.45.178   <none>        80/TCP    2d
+        redis-svc     ClusterIP   10.96.89.234   <none>        6379/TCP  5d
+
+        [용량순으로 PV 정렬]
+        kubectl get pv --sort-by=.spec.capacity.storage
+        [출력 예시]
+        NAME      CAPACITY   ACCESS MODES   STATUS    CLAIM
+        pv-1      1Gi       RWO            Bound     default/pvc-1
+        pv-2      5Gi       RWO            Bound     default/pvc-2
+        pv-3      10Gi      RWO            Available
+
+    3-4. Custom Columns 활용
+        [복잡한 출력 형식이 필요할 때는 custom-columns를 사용가능]
+        kubectl get nodes -o custom-columns=NAME:.metadata.name,CPU:.status.capacity.cpu,ARCH:.status.nodeInfo.architecture
+
+        [출력 예시]
+        NAME      CPU    ARCH
+        master    4      amd64
+        worker1   2      amd64
+        worker2   2      amd64
+
+    3-5. 고급 기능 
+        [여러 필드 동시 출력 (루프)]
+        kubectl get pods -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}
+        {.metadata.name}{","}{.status.podIP}{"\n"}{end}'
+        [출력 예시]
+        default/nginx-pod,10.244.0.5
+        kube-system/coredns-78fcd69978-abcd,10.244.1.3
+        monitoring/prometheus-85bc764d5-xyz,10.244.2.7
