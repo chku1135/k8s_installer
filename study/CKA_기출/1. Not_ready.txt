@@ -1,0 +1,339 @@
+##참고: https://sjw1995628.tistory.com/36
+
+
+##Network CNI Notready TroubleShooting 
+
+1. 문제 상황 진단: 워커 노드가 안됨 
+kubectl get nodes
+[출력]
+NAME            STATUS     ROLES    AGE     VERSION
+master-node     Ready      master   15d     v1.24.0
+worker-node01   NotReady   <none>   15d     v1.24.0
+
+
+2. 문제 해결 과정
+kubectl describe node worker-node01
+[출력]
+...
+Conditions:
+  Type             Status  LastHeartbeatTime                 Reason                       Message
+  ----             ------  -----------------                 ------                       -------
+  Ready            False   2024-12-31T08:15:23Z             KubeletNotReady             Container runtime network not ready: NetworkReady=false reason:NetworkPluginNotReady message:Network plugin returns error: cni plugin not initialized
+ 
+KubeletNotReady             Container runtime network not ready: NetworkReady=false reason:NetworkPluginNotReady message:Network plugin returns error: cni plugin not initialized
+- 문제 발생상황의 이유를 확인하면 네트워크 문제임을 확인 
+
+
+3. 노드 접속 및 kubelet 로그 확인 
+ssh worker-node01
+journalctl -u kubelet -f
+[출력]
+...
+Dec 31 08:15:23 worker-node01 kubelet[1234]: E1231 08:15:23.123456    1234 kubelet.go:[2347] Container runtime network not ready: NetworkReady=false reason:NetworkPluginNotReady message:Network plugin returns error: cni plugin not initialized
+- 해당 노드에 직접 ssh로 접속한다. 
+- 그리고 kubelet에서 journalctl -u kubelet 을 해서 확인한다. 
+- kubelet 상태 확인하는 명령어들: 'systemctl status kubelet', 'cat /var/log/syslog'
+
+
+4. CNI 설정확인
+ls -l /etc/cni/net.d/
+total 0
+- CNI 설치되어있지 않았다. 
+
+
+5. CNI 재설치
+- 자신이 원하는 https://kubernetes.io/docs/concepts/cluster-administration/addons/ CNI 플러그인들을 확인해서 고른다.
+- 본인은 calico를 선택 
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+ 
+
+6. CNI 설저 파일 생성 확인 
+ls -l /etc/cni/net.d/
+[출력]
+total 12
+-rw-r--r-- 1 root root 1671 Dec 31 08:20 10-calico.conflist
+ 
+
+7. kubelet 서비스 재시작 및 노드 확인 
+systemctl restart kubelet
+
+[controlplane으로 다시 복귀]
+exit
+
+[노드확인]
+kubectl get nodes
+NAME            STATUS   ROLES    AGE    VERSION
+master-node     Ready    master   15d    v1.24.0
+worker-node01   Ready    <none>   15d    v1.24.0
+
+
+##노드의 디스크가 꽉찬 경우 
+
+1. 문제 상황 확인 
+kubectl get nodes
+NAME            STATUS     ROLES    AGE     VERSION
+master-node     Ready      master   30d     v1.24.0
+worker-node01   Ready      <none>   30d     v1.24.0
+worker-node02   NotReady   <none>   30d     v1.24.0
+
+
+2. 노드 상태 상세 확인
+- describe output에서 events나 conditions에서 메모리 부족임을 확인 가능 
+kubectl describe node worker-node02
+Conditions:
+  Type             Status  LastHeartbeatTime                 Reason              Message
+  ----             ------  -----------------                 ------              -------
+  MemoryPressure   True    2024-12-31T10:30:23Z            MemoryPressure      Node memory is running low
+  Ready            False   2024-12-31T10:30:23Z            KubeletNotReady     Node is under memory pressure
+
+Events:
+  Type     Reason          Age                From     Message
+  ----     ------          ----               ----     -------
+  Warning  MemoryPressure  2m (x3 over 4m)    kubelet  Node memory is running low
+
+
+3. 노드 리소스 사용량 확인 
+ssh worker-node02
+free -h
+              total        used        free      shared  buff/cache   available
+Mem:           64Gi        58Gi        1Gi        2Gi        3Gi         1Gi
+Swap:           0B          0B         0B
+
+
+4. 메모리 과다 사용 파드 확인
+kubectl top pods -A --sort-by=memory
+NAMESPACE     NAME                     CPU    MEMORY
+default       heavy-memory-app-1       200m   15Gi
+default       heavy-memory-app-2       150m   12Gi
+monitoring    prometheus-server        100m   8Gi
+
+
+5. 리소스 재분배 
+[메모리 사용량이 높은 파드 재배치]
+kubectl drain worker-node02 --ignore-daemonsets
+
+
+6. 리소스 제한 설정
+[heavy-memory-app deployment 수정]
+kubectl edit deploy heavy-memory-app
+--------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heavy-memory-app
+spec:
+  template:
+    spec:
+      containers:
+      - name: heavy-memory-app
+        resources:
+          requests:
+            memory: "8Gi"
+          limits:
+            memory: "10Gi" ## 수정
+
+
+7. 노드복구
+[노드 uncordon]
+kubectl uncordon worker-node02
+
+
+8. 리소스 쿼터 설정
+- 리소스 쿼터 개념 : 네임스페이스당 사용할 수 있는 리소스의 총량을 제한하는 오브젝트.
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: mem-cpu-quota
+spec:
+  hard:
+    requests.memory: 32Gi
+    limits.memory: 48Gi
+
+
+9. 노드 확인 
+kubectl get nodes
+NAME            STATUS   ROLES    AGE    VERSION
+master-node     Ready    master   30d    v1.24.0
+worker-node01   Ready    <none>   30d    v1.24.0
+worker-node02   Ready    <none>   30d    v1.24.0
+
+
+##Kubelet 설정 에러 > kubelet 서비스 중지
+
+1. 문제 상황 
+- Kubelet에 죽어있다. 
+systemctl status kubelet
+
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/lib/systemd/system/kubelet.service; enabled)
+   Active: inactive (dead)
+
+- 해결과정
+systemctl start kubelet
+systemctl enable kubelet
+systemctl status kubelet
+
+
+##kubelet 오류 > 설정 오류 
+
+1. 노드상태확인
+kubectl get nodes
+
+NAME           STATUS     ROLES    AGE   VERSION
+worker-node1   NotReady   <none>   10d   v1.28.2
+master-node    Ready      master   10d   v1.28.2
+
+
+2. Kubelet 서비스 상태 확인 
+systemctl status kubelet
+
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/etc/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+   Active: failed (Result: exit-code) since Tue 2024-12-31 06:00:00 KST; 5min ago
+     Docs: https://kubernetes.io/docs/
+  Process: 12345 ExecStart=/usr/local/bin/kubelet (code=exited, status=255)
+ Main PID: 12345 (code=exited, status=255)
+
+Dec 31 06:00:00 worker-node1 kubelet[12345]: F1231 06:00:00.123456    12345 server.go:[274] failed to run Kubelet: "swap is enabled"
+- swap 이 활성화되어 있어서 kubelet이 동작하지 않는다. 
+
+    2-1. kubelet과 swap과의 관계
+    - kubernetes는 메모리 관리와 관련된 예측 가능성과 성능을 보장하기위해 swap을 비활성화해야 됨
+    - 노드의 메모리 사용량을 정확히 추적하고 스케줄링 결정을 내릴 수 있도록 하기 위함 
+
+    2-2. 임시 비활성화 
+    sudo swapoff -a
+    - 해당 명령어로 시스템 재부팅전까지 swap을 비활성화 
+
+    2-3. 영구적으로 비활성화 
+    - /etc/fstab 파일에서 swap 항목을 주석 처리 
+    vi /etc/fstab
+
+    [수정 전]
+    /dev/mapper/centos-swap swap                    swap    defaults        0    0
+
+    [수정 후 ]
+    #/dev/mapper/centos-swap swap                    swap    defaults        0   0
+    --> swap 주석 처리
+
+
+##kubelet 오류 트러블 슈팅 > hostname 불일치
+
+1. 로그 확인 
+journalctl -u kubelet | tail -n 20
+
+Dec 31 06:05:00 worker-node1 kubelet[12345]: E1231 06:05:00.567890    12345 server.go:421 "Failed to start node" err="node \"worker-node1\" not found"
+Dec 31 06:05:00 worker-node1 kubelet[12345]: E1231 06:05:00.567890    12345 reflector.go:138 k8s.io/client-go/informers/factory.go:134 Failed to list *v1.Node...
+Dec 31 06:05:00 worker-node1 kubelet[12345]: E1231 06:05:00.567890    12345 kubelet_node_status.go:92 "Unable to register node with API server" err="node \"worker-node1\" not found"
+
+node "worker-node1" not found
+- kubelet에서 해당 메시지가 나타나지 않는다.
+- 이는 노드 이름('hostname')이 클러스터에 등록된 이름과 일치하지 않는 경우 발생 
+
+
+2. hostname 이름 확인
+hostnamectl status
+
+   Static hostname: wrong-hostname
+         Icon name: computer-vm
+           Chassis: vm
+        Machine ID: abcdefghijklmnop
+           Boot ID: qrstuvwxyzabcdefg
+Operating System: CentOS Linux 7 (Core)
+     Architecture: x86-64
+- 호스트 이름이 wrong hostname 으로 설정되어 있습니다. 
+
+
+3. hostname 이름 변경 
+hostnamectl set-hostname worker-node1
+
+
+4. kubelet 재시작 및 상태 확인 
+hostnamectl set-hostname worker-node1
+
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/etc/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+   Active: active (running) since Tue 2024-12-31 06:15:00 KST; 5s ago
+     Docs: https://kubernetes.io/docs/
+ Main PID: 67890 (kubelet)
+    Tasks: 12 (limit: 4915)
+   Memory: 50M
+   CGroup: /system.slice/kubelet.service
+           └─67890 /usr/local/bin/kubelet --config=/var/lib/kubelet/config.yaml ...
+
+
+5. 노드 상태 재확인
+kubectl get nodes
+
+
+##kubelet 오류 문제 (4) 클라이언트 인증서 문제: 클라이언트 인증서가 만료되거나 갱신되지 않는 경우 
+
+1. 노드 상태 확인 
+kubectl get nodes
+
+NAME           STATUS     ROLES    AGE   VERSION
+worker-node1   NotReady   <none>   10d   v1.28.2
+master-node    Ready      master   10d   v1.28.2
+
+
+2. kubelet 로그 확인
+ssh worker-node1 
+journalctl -u kubelet | tail -n 20
+
+Dec 31 12:00:00 worker-node1 kubelet[12345]: E1231 12:00:00.123456    12345 server.go:421 "Failed to authenticate with API server" err="x509: certificate has expired or is not yet valid"
+x509: certificate has expired or is not yet valid
+- 로그에서는 인증서가 만료되었음을 나타냄 
+
+
+3. 인증서 파일 확인 
+openssl x509 -in /var/lib/kubelet/pki/kubelet-client-current.pem -noout -text | grep "Not After"
+            Not After : Dec 30 23:59:59 2024 GMT
+- kubelet이 사용하는 /var/lib/kubelet/pki/kubelet-client-current.pem이며 이 인증서를 확인하는 openssl x506 -in -noout -text 명령어를 사용한다. 
+- Not After(유효기간)에서 확인했을떄, 인증서가 만료되었음을 확인 가능 
+
+
+4. 기존 인증서 및 설정 백업 
+sudo mv /var/lib/kubelet/pki/kubelet-client-current.pem /var/lib/kubelet/pki/kubelet-client-current.pem.bak
+sudo mv /etc/kubernetes/kubelet.conf /etc/kubernetes/kubelet.conf.bak
+
+
+5. 새로운 인증서 생성
+- kubeadm은 기본적으로 kubelet의 클라이언트 인증서를 자동으로 갱신하지만, 실패한 경우 수동으로 갱신 
+
+    5-1. 마스터 노드에서 인증서 갱신 
+    sudo kubeadm certs renew all
+
+    certificate embedded in the kubeconfig file for the admin to use and for kubeadm itself renewed
+    certificate for serving the Kubernetes API renewed
+    certificate the apiserver uses to access etcd renewed
+    certificate for the API server to connect to kubelet renewed
+    ...
+    Done renewing certificates.
+
+
+    5-1. kubeadm을 사용하여 새로운 kubelet.conf 생성
+    - 갱신된 인증서를 기반으로 새로운 kubelet.conf 파일을 생성 
+    sudo kubeadm kubeconfig user --org system:nodes --client-name system:node:worker-node1 > /tmp/kubelet.conf
+    - 이 명령어는 클러스터에서 kubelet의 인증 정보 파일을 새로 생성한는데 사용
+    - kubeadm kubeconfig user : 특정사용자를 위한 kubeconfig 파일을 생성 
+    - '--org system:nodes': 노드인증을 위한 기본 조직 이름
+    - '--client-name system:node:worker-node1': 노드의 이름을 포함한 클라이언트 식별자를 지정 
+
+    scp /tmp/kubelet.conf worker-node1:/etc/kubernetes/kubelet.conf
+    - 해당 파일을 노드로 옮긴다. 
+
+6. 워커노드에서 kubelet 재시작 
+
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+sudo systemctl status kubelet
+
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/etc/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+   Active: active (running) since Tue 2024-12-31 12:15:00 KST; 5s ago
+ Main PID: 67890 (kubelet)
+    Tasks: 12 (limit: 4915)
+   Memory: 50M
+   CGroup: /system.slice/kubelet.service
+           └─67890 /usr/local/bin/kubelet --config=/var/lib/kubelet/config.yaml ...
