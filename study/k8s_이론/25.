@@ -1,0 +1,235 @@
+##참고: https://sjw1995628.tistory.com/34
+
+
+##어플리케이션 장애 해결
+
+1. 어플리케이션 접근성 테스트 
+
+    1-1. 프론트엔드 테스트
+    - `curl http://web-service-ip:node-port`를 사용하여 웹 어플리케이션 접근성 테스트 
+    - 성공시 HTTP 응답과 함꼐 웹페이지 표시됨 
+
+    1-2. 연결 시간 초과 오류 분석
+    curl: (7) Failed to connect to web-service-ip port node-port: Connection timed out
+    - 연결 시간 초과 오류가 발생하면 추가 조사 진행 
+
+    1-3. 일반적인 확인 사항 
+    - 서비스 포트가 올바르게 설정되어 있는지 확인
+    - 파드가 정상적으로 실행 중인지 상태확인 
+    - 웹서버 어플리케이션이 지정된 포트에서 수신 대기 중인지 확인 
+
+    1-4. 네트워크 연결성 확인
+    - 노드 간 네트워크 연결 상태 점검
+    - 방화벽 설정 확인 
+    - 서비스의 셀렉터와 파드 레이블 매칭 검증 
+
+    1-5. 로그 분석 
+    - 웹서버 파드의 로그를 확인하여 오류 메시지 검사 
+    - 이전 로그를 확인하여 문제의 패턴 파악 
+
+
+2. 서비스 상태 확인
+
+    2-1. 서비스가 파드 엔드포인트를 발견했는지를 확인 
+    [엔드포인트 명령어로 확인]
+    kubectl get endpoints <service-name>
+    - 엔드포인트가 none으로 표시되면 서비스가 파드를 찾지 못한 것 
+    - 정상적인 경우, 파드의 IP 주소와 포트가 표시됨
+
+    2-2. 서비스 셀렉터 확인 
+    - 서비스의 spec.selector와 파드의 metadata.labels가 정확히 일치해야 함 
+    - 서비스는 equality-based 설렉터만 지원하므로 정확한 키-값 쌍 매칭이 필요
+    - 레이블 불일치는 서비스가 파드를 찾지 못하는 주요 원인 
+
+    2-3. 일반적인 문제점 
+    - 서비스의 포트가 spec.ports에 명시되지 않음 
+    - targetPort가 파드에서 사용하는 포트와 다름 
+    - 포르토콜이 파드와 서비스 간에 일치하지 않음 
+
+
+3. 파드 조사 
+
+    3-1. 파드 상태 확인
+    kubectl get pod
+    [출력]
+    NAME   READY     STATUS    RESTARTS   AGE
+    Web    1/1       Running   5          50m
+
+    3-2. 상세 파드 분석
+    - kubectl describe pod web 을 사용하여 이벤트와 상태 확인 
+    - 확인 가능한 중요 이벤트(파드 스케줄링, 이미지 가져오기, 컨테이너 생성, 컨테이너 시작 상태)를 해당 명령어를 통해 확인 가능
+
+
+4. 로그분석 
+kubectl logs web -f --previous
+
+    4-1. 로그에서 확인할 수 있는 내용 
+    - 정상 HTTP 200 응답 
+    - 400 오류 
+    - 데이터베이스 오류 메시지 "Some Database Error application exiting"
+
+
+5. 데이터베이스 서비스 검증 
+
+    5-1. 의존성 확인 
+    - 데이터베이스 서비스 상태 확인
+    - 웹과 데이터베이스 서비스 간 통신 확인 
+    - 데이터베이스 파드가 정상적으로 실행 중인지 확인 
+
+
+6. 어플리케이션 매핑 
+- 어플리케이션 구성의 시각적 또는 문서화된 맵 작성 
+- 모든 구성 요소와 관계 문서화
+- 맵의 어느 쪽 끝에서든 문제 해결 시작 가능 
+- 각 객체와 연결을 체계적으로 확인 
+
+7. 재시작 분석
+
+    7-1. 파드 재시작 횟수 모니터링
+    kubectl get pods
+    [출력]
+    NAME   READY     STATUS    RESTARTS   AGE
+    Web    1/1       Running   5          50m
+    - RESTARTS열에서 컨테이너의 재시작 횟수 확인 가능
+    - 높은 재시작 횟수는 어플리케이션 문제를 나타낼 수 있음 
+
+    7-2. 로그 분석 명령어 
+    kubectl logs <pod-name> -c <container-name>
+    - 특정 컨테이너의 현재 로그 확인 
+    - 다중 컨테이너 파드의 경우 -c 옵션으로 컨테이너 지정 
+
+    7-3. 실시간 로그 모니터링 '-f'
+    kubectl logs -f <pod-name>
+    - `-f` 플래그로 실시간 로그 모니터링
+    - 어플리케이션 문제를 실시간으로 감지 가능
+
+    7-4. 이전 파드 로그 확인 
+    kubectl logs --previous <pod-name>
+    - `--previous` 플래그로 이전 파드 인스턴스의 로그 확인
+    - 장애 원인 분석에 유용 
+
+    7-5. 시간 기반 로그 확인 
+    kubectl logs --since=6h <pod-name>
+    kubectl logs --tail=50 <pod-name>
+    - '--since'로 특정 시간 범위의 로그 확인 
+    - '--tail'로 최근 N줄의 로그만 확인
+
+##컨트롤 플레인 점검 
+
+1. 노드 상태 확인 
+
+    1-1. 노드 상태 점검 
+    kubectl get nodes
+    [출력]
+    NAME       STATUS    ROLES     AGE    VERSION
+    worker-1   Ready     <none>    8d     v1.13.0
+    worker-2   Ready     <none>    8d     v1.13.0
+ 
+
+2. 파드 상태 확인
+
+    2-1. 시스템 파드 확인 
+    kubectl get pods -n kube-system
+    [출력]
+    NAME                               READY   STATUS    RESTARTS   AGE
+    coredns-78fcdf6894-5dntv          1/1     Running   0         1h
+    etcd-master                       1/1     Running   0         1h
+    kube-apiserver-master             1/1     Running   0         1h
+    kube-controller-manager-master    1/1     Running   0         1h
+    kube-scheduler-master             1/1     Running   0         1h
+ 
+
+3. 컨트롤 플레인 서비스 상태 
+service kube-apiserver status
+service kube-controller-manager status
+service kube-scheduler status
+ 
+
+4. 서비스 로그 확인 
+kubectl logs kube-apiserver-master -n kube-system
+ 
+
+5. 시스템 로그 확인 
+sudo journalctl -u kube-apiserver
+ 
+
+##워커노드 TroubleShooting 
+
+1. 노드 상태 확인 
+kubectl get nodes
+[출력]
+NAME       STATUS     ROLES    AGE    VERSION
+worker-1   Ready      <none>   8d     v1.13.0
+worker-2   NotReady   <none>   8d     v1.13.0
+
+
+2. 노드 상세 정보 분석
+kubectl describe node worker-1
+[다음과 같은 조건 확인]
+- OutOfDisk: 디스크 공간 부족 여부
+- MemoryPressure: 메모리 부족 상태
+- DiskPressure: 디스크 용량 부족 상태
+- PIDPressure: 프로세스 수 초과 여부
+- Ready: 노드의 전반적인 상태
+
+
+3. 노드 문제 진단 
+top
+df -h
+- CPU와 메모리 사용량 모니터링
+- 디스크 공간 사용량 확인
+
+
+4. kubelet 상태 확인 
+service kubelet status
+sudo journalctl -u kubelet
+
+
+5. 인증서 검증 
+openssl x509 -in /var/lib/kubelet/worker-1.crt -text
+- 인증서 만료 여부 
+- 올바른 그룹 소속 여부
+- 올바른 CA에서 발급되었는지 여부 
+
+
+##네트워크 트러블슈팅
+
+1. CNI 플러그인 관련 문제
+
+    1-1. 주요 CNI 플러그인
+    - WeaveNet: 기본적인 오버레이 네트워크 제공 
+    - Flannel: 간단한 L3 네트워크 구성, 네트워크 정책 미지원 
+    - Calico: 고급 네트워크 기능과 네트워크 정책 지원 
+
+    1-2. 문제 해결 단계
+    - CNI 플러그인이 설치되어 있는지 확인
+    - kubelet의 CNI 설정 디렉토리 확인 
+    - 여러 CNI 설정 파일이 있는 경우 사전순 첫 번째 파일이 사용됨 
+
+
+2. CoreDNS 문제 해결 
+
+    2-1. 일반적인 문제
+    - CoreDNS파드가 Pending 상태: 네트워크 플러그인 설치 확인 
+    - CrashLoopBackOff 상태: SELinux와 Docker 버전 호환성 확인, DNS 루프 감지 확인, resolv.cnf 설정 검증 
+
+    2-2. 상태 확인 명령어 
+    kubectl -n kube-system get deployment coredns
+    kubectl -n kube-system get ep kube-dns
+
+
+3. kube-proxy 트러블 슈팅 
+
+    3-1. 확인사항
+    - kube-proxy 파드 실행 상태 확인 
+    - 로그 분석
+    - 설정 파일 검증 
+    kubectl -n kube-system describe ds kube-proxy
+    netstat -plan | grep kube-proxy
+
+
+4. 서비스 연결성 문제
+- 서비스 엔드포인트 확인
+- 셀렉터와 레이블 매칭 검증
+- kube-proxy 설정 및 상태 확인 
+- 네트워크 정책 검토
