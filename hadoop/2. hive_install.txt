@@ -1,0 +1,158 @@
+##참고: https://sseozytank.tistory.com/102
+
+##hive install
+
+다운 경로: https://dlcdn.apache.org/hive
+ >> bin.tar.gz 링크 주소 복사
+
+
+wget https://dlcdn.apache.org/hive/hive-3.1.3-bin.tar.gz
+
+tar -zxvf apache-hive-3.1.3-bin.tar.gz
+sudo mv /home/user/apache-hive-3.1.3-bin /usr/local/hive
+sudo chown -R $USER:$USER /usr/local/hive
+
+##환경변수 설정
+
+vi ~/.bashrc
+
+export HIVE_HOME="/usr/local/hive"
+export PATH=$PATH:$HIVE_HOME/bin
+
+source ~/.bashrc
+
+##hive config 설정
+vim $HIVE_HOME/bin/hive-config.sh
+
+export HADOOP_HOME=/usr/local/hadoop
+
+
+##hdfs 관련 디랙토리 생성
+hdfs dfs -mkdir /hive
+hdfs dfs -chmod g+w /hive
+hdfs dfs -mkdir -p /user/hive/warehouse
+hdfs dfs -chmod g+w /user/hive/warehouse
+
+
+##property 추가
+cd $HIVE_HOME/conf
+cp hive-default.xml.template ./hive-site.xml
+vi hive-site.xml
+
+(추가)
+<property>
+  <name>system:java.io.tmpdir</name>
+  <value>/tmp/hive/java</value>
+</property>
+<property>
+  <name>system:user.name</name>
+  <value>${user.name}</value>
+</property>
+
+
+##javax.jdo 수정
+vi $HIVE_HOME/conf/hive-site.xml
+
+#초기 데이터베이스 존재하지 않을 시 해당 이름의 데이터베이스를 생성하는 옵션
+#본인 경로로 수정
+  <name>javax.jdo.option.connectionURL</name>
+  <value>jdvc:derby:/home/hdoop/apache-hive3.1.3-bin/metastore_db;databaseName=metastore_db;create=true</value>
+
+
+##derby database 시작
+$HIVE_HOME/bin/schematool -ititSchema -dbType derby
+
+[오류 troubleshooting]
+1. java.lang.NoSuchMethodError 발생
+hadoop과 hive의 guava version 호환 문제
+
+> $HIVE_HOME/lib의 guava 삭제
+> $HADOOP_HOME/share/hadoop/hdfs/lib의 guava(jar) $HIVE_HOME/lib 경로로 복사
+
+2. Illegal character entity: expanstion character
+ >> hive-site.xml의 트래쉬 워드 삭제
+
+
+##hive test
+hive            >> 실행 확인
+
+
+##샘플 쿼리 실행 테스트
+
+#샘플 다운로드
+wget https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/smaples/features.zip
+unzip features.zip
+head features.txt
+
+#hive 실행 > 테이블 생성
+hive
+CREATE TABLE hive_features
+    (feature_id             BIGINT,
+    feature_name            STRING ,
+    feature_class           STRING ,
+    state_alpha             STRING,
+    prim_lat_dec            DOUBLE ,
+    prim_long_dec           DOUBLE ,
+    elev_in_ft              BIGINT)
+    ROW FORMAT DELIMITED
+    FIELDS TERMINATED BY '|'
+    LINES TERMINATED BY '\n';
+
+
+#데이터 로드
+LOAD DATA
+LOCAL
+INPATH  './features.txt'
+OVERWRITE
+INTO TABLE hive_features;
+
+#쿼리 실행
+SELECT * FROM hive_features;
+
+LOAD DATA
+LOCAL
+INPATH './features.txt'
+OVERWRITE
+INTO TABLE hive_features;
+
+[오류 troubleshooting]
+1. Number of reduce tasks not specified. Estimated from input data size: 1 발생
+ > 상세 로그 확인 > namenode:8088 web UI > history 확인
+ > Logs > syslog
+ > Caused by: org.apache.hadoop.fs.UnsupportedFileSystemException: No FileSystem fo r scheme "hdfs"
+ [조치]
+ > mapred-site.xml 하기 내용 추가 or 확인
+<property> 
+  <name>mapreduce.framework.name</name>
+  <value>yarn</value> 
+</property>
+<property> 
+  <name>yarn.app.mapreduce.am.env</name>
+  <value>HADOOP_MAPRED_HOME=/home/user/hadoop-3.3.4</value> 
+</property>
+<property>
+  <name>mapreduce.map.env</name>
+  <value>HADOOP_MAPRED_HOME=/home/user/hadoop-3.3.4</value>
+</property>
+<property>
+  <name>mapreduce.reduce.env</name>
+  <value>HADOOP_MAPRED_HOME=/home/user/hadoop-3.3.4</value>
+</property>
+<property> 
+	<name>mapreduce.application.classpath</name>
+    <value>/home/tempx/hadoop-3.3.4/etc/hadoop:/home/tempx/hadoop-3.3.4/share/hadoop/common/lib/*:/home/tempx/hadoop-3.3.4/share/hadoop/common/*:/home/tempx/hadoop-3.3.4/share/hadoop/hdfs:/home/tempx/hadoop-3.3.4/share/hadoop/hdfs/lib/*:/home/tempx/hadoop-3.3.4/share/hadoop/hdfs/*:/home/tempx/hadoop-3.3.4/share/hadoop/mapreduce/*:/home/tempx/hadoop-3.3.4/share/hadoop/yarn:/home/tempx/hadoop-3.3.4/share/hadoop/yarn/lib/*:/home/tempx/hadoop-3.3.4/share/hadoop/yarn/* </value> 
+</property>
+*** HADOOP_CLASSPATH 확인 ***
+export HADOOP_CLASSPATH=$(hadoop classpath)
+echo $HADOOP_CLASSPATH
+> 출력 확인
+
+2. info log가 많이 출력
+vi $HIVE_HOME/conf/hive-site.xml
+<name>hive.async.log.enabled</name>
+<value>false</value>        << 변경
+
+3. hive 재기동 시 에러 발생
+ogging initialized using configuration in jar:file:/home/tempx/apache-hive-3.1.3-bin/lib/hive-common-3.1.3.jar!/hive-log4j2.properties Async: false Exception in thread "main" java.lang.RuntimeException: org.apache.hadoop.hdfs.server.namenode.SafeModeException: Cannot create directory /tmp/hive/tempx/9d85ad63-5a81-4853-bd0f-5419b1088307. Name node is in safe mode. The reported blocks 2694 has reached the threshold 0.9990 of total blocks 2694. The minimum number of live datanodes is not required. In safe mode extension. Safe mode will be turned off automatically in 9 seconds. NamenodeHostName:localhost at 
+##safe mode 해제
+hdfs dfsadmin -safemode leave
