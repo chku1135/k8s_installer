@@ -1,0 +1,497 @@
+##참고: https://magpienote.tistory.com/223
+
+##hadoop install(NN=2, DN=3)
+
+1. vm 구성
+ - nn=2, dn=3 > 총 5개 구성
+ - ip 설정
+ - hosts, hostname 수정
+ - hadoop user 생성
+
+2. JAVA 설치(java 1.8.0 이상?)  ##호환성 확인
+ - bashrc or profile 추가
+=================================== 
+JAVA_HOME=/usr/local/lib/jdk1.8.0_341
+JRE_HOME=$JAVA_HOME/jre
+PATH=$PATH:$JAVA_HOME/bin:$JRE_HOME/bin
+export JAVA_HOME
+export JRE_HOME
+===================================
+> source .bashrc or .profile
+
+
+3. hadoop install
+
+sudo wget https://dlcdn.apache.org/hadoop/common/hadoop-3.2.3/hadoop-3.2.3.tar.gz
+
+sudo tar -zxvf hadoop-3.2.3.tar.gz -C /usr/local
+sudo mv /usr/local/hadoop-3.2.3 /usr/local/hadoop
+
+##path 추가
+sudo vi .profile
+==========================================================
+HADOOP_HOME=/usr/local/hadoop
+...
+PATH=$PATH:$JAVA_HOME/bin:$JRE_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
+
+(추가)
+export HADOOP_HOME=/usr/local/hadoop
+export HADOOP_COMMON_HOME=$HADOOP_HOME
+export HADOOP_HDFS_HOME=$HADOOP_HOME
+export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+export YARN_CONF_DIR=$HADOOP_HOME/etc/hadoop
+export HADOOP_MAPRED_HOME=$HADOOP_HOME
+==========================================================
+source .profile
+
+(확인)
+env | grep HADOOP
+
+
+##hdfs-site 편집
+sudo vim $HADOOP_HOME/etc/hadoop/hdfs-site.xml
+============================================================
+<configuration>
+  <property>
+    <name>dfs.replication</name>
+    <value>2</value>
+  </property>
+  <!--namenode 디렉토리-->
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>/usr/local/hadoop/data/nameNode</value>
+  </property>
+  <!--datanode 디렉토리-->
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>/usr/local/hadoop/data/dataNode</value>
+  </property>
+  <!--journalnode 디렉토리-->
+  <property>
+    <name>dfs.journalnode.edits.dir</name>
+    <value>/usr/local/hadoop/data/dfs/journalnode</value>
+  </property>
+  <!--hadoop cluster 이름-->
+  <property>
+    <name>dfs.nameservices</name>
+    <value>my-hadoop-cluster</value>
+  </property>
+  <!--cluster에서 사용할 namenode 정의 설정 파일에서만 씀-->
+  <property>
+    <name>dfs.ha.namenodes.my-hadoop-cluster</name>
+    <value>namenode1,namenode2</value>
+  </property>
+  <!--namenode1 주소 설정-->
+  <property>
+    <name>dfs.namenode.rpc-address.my-hadoop-cluster.namenode1</name>
+    <value>nn1:8020</value>
+  </property>
+  <!--namenode2 주소 설정-->
+  <property>
+    <name>dfs.namenode.rpc-address.my-hadoop-cluster.namenode2</name>
+    <value>nn2:8020</value>
+  </property>
+  <!--namenode1 웹 접속 주소-->
+  <property>
+    <name>dfs.namenode.http-address.my-hadoop-cluster.namenode1</name>
+    <value>nn1:50070</value>
+  </property>
+  <!--namenode2 웹 접속 주소-->
+  <property>
+    <name>dfs.namenode.http-address.my-hadoop-cluster.namenode2</name>
+    <value>nn2:50070</value>
+  </property>
+  <!--Journalnode 이동하고 다닐 접속 포트 주소-->
+  <property>
+    <name>dfs.namenode.shared.edits.dir</name>
+    <value>1journal://nn1:8485;nn2:8485;dn1:8485/my-hadoop-cluster</value>
+  </property>
+  <!--failover 관련-->
+  <property>
+    <name>dfs.client.failover.proxy.provider.my-hadoop-cluster</name>
+    <value>org.apache.hadoop.hdfs.server.namenode.ha.ConfigureFailoverPorxyProvider</value>
+  </property>
+  <!--그래도 입력-->
+  <property>
+    <name>dfs.ha.fencing.methods</name>
+    <value>shell(/bin/true)</value>
+  </property>
+  <!--ssh 다른 노드 접속 정보 주소-->
+  <property>
+    <name>dfs.ha.fencing.ssh.private-key-files</name>
+    <value>/root/.ssh/id_rsa</value>
+  </property>
+  <!--failover시 자동 node설정 여부-->
+  <property>
+    <name>dfs.ha.automatic-failover.enabled</name>
+    <value>true</value>
+  </property>
+  <!--name 디렉토리-->
+  <property>
+    <name>dfs.name.dir</name>
+    <value>/usr/local/hadoop/data/name</value>
+  </property>
+  <!--data 디렉토리-->
+  <property>
+    <name>dfs.data.dir</name>
+    <value>/usr/local/hadoop/data/data</value>
+  </property>
+</configuration>
+============================================================
+
+
+##core-site.xml
+sudo vim $HADOOP_HOME/etc/hadoop/core-site.xml
+============================================================
+<configuration>
+  <!--hdfs 접속 정보-->
+  <property>
+    <name>fs.default.name</name>
+    <value>hdfs://nn1:9000</value>
+  </property>
+  <!--설정한 cluster service 이름으로 기입-->
+  <property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://my-hadoop-cluster/value>
+  </property>
+  <!--zookeeper 홀수로 설정-->
+  <property>
+    <name>ha.zookeeper.quorum</name>
+    <value>nn1:2181,nn2:2181,dn1:2181</value>
+  </property>
+</configuration>
+============================================================
+
+
+##yarn-site.xml
+sudo vim $HADOOP_HOME/etc/hadoop/yarn-site.xml
+============================================================
+<configuration>
+  <!--그래로 입력-->
+  <property>
+    <name>yarn.nodemanager.aux-services</name>
+    <value>mapreduce_shuffle</value>
+  </property>
+  <property>
+    <name>yarn.nodemanager.aux-services.mapreduce_shuffle.class</name>
+    <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+  </property>
+  <!--resourcemanager hostname입력-->
+  <property>
+    <name>yarn.resourcemanager.hostname</name>
+    <value>nn1</value>
+  </property>
+  <property>
+    <name>yarn.nodemanager.vmem-check-enabled</name>
+    <value>false</value>
+  </property>
+</configuration>
+============================================================
+
+
+##mapred-site.xml
+============================================================
+<configuration>
+  <!--mapreduce yarn으로 설정-->
+  <property>
+    <name>mapreduce.framework.name</name>
+    <value>yarn</value>
+  </property>
+  <!--yarn mapreduce 설정 정보 주소-->
+  <property>
+    <name>yarn.app.mapreduce.am.env</name>
+    <value>HADOOP_MAPRED_HOME=${HADOOP_HOME}</value>
+  </property>
+  <!--mapreduce 설정 정보 주소-->
+  <property>
+    <name>mapreduce.map.env</name>
+    <value>HADOOP_MAPRED_HOME=${HADOOP_HOME}</value>
+  </property>
+  <property>
+    <name>mapreduce.reduce.env</name>
+    <value>HADOOP_MAPRED_HOME=${HADOOP_HOME}</value>
+  </property>
+</configuration>
+============================================================
+
+
+##hadoop-env.sh 수정
+sudo vim $HADOOP_HOME/etc/hadoop/hadoop-env.sh
+
+#자신 자바 주소
+export JAVA_HOME=/usr/local/lib/jdk1.8.0_341
+
+#hadoop
+export HADOOP_HOME=/usr/local/hadoop
+export HDFS_NAMENODE_USER=root
+export HADOOP_SECURE_DN_USER=hdfs
+export HDFS_DATANODE-USER=root
+export HDFS_SECONDARYNAMENODE_USER=root
+export YARN_RESOURCEMANAGER_USER=root
+export HADOOP_SECURE_DN_USER=root
+export HDFS_JOURNALNODE_USER=root
+export HDFS_ZKFC_USER=root
+
+
+##work 편집
+sudo vim $HADOOP_HOME/etc/hadoop/workers
+
+(localhost << 주석 후  datanode 추가)
+dn1
+dn2
+dn3
+
+##master 편집
+sudo vim $HADOOP_HOME/etc/hadoop/masters
+
+(아래 내용 추가)
+nn1
+nn2
+
+
+
+##spack 설정
+
+sudo wget https://dlcdn.apapche.org/spark/spark-3.3.2/spark-3.2.2-bin-hadoop3.2.tgz
+sudo tar -zxvf spark-3.2.2-bin-hadoop3.2.tgz
+
+sudo mv ~/spark-3.2.2-bin-hadoop3.2/ /usr/local/spark
+
+#pyspark 설치
+sudo yum install -y python3-pip
+sudo pip3 install pyspark findspark
+
+#환경 설정
+sudo vim /etc/profile
+...
+SPARK_HOME=/usr/local/spark
+...
+PATH=$PATH:~:$SPARK_HOME/bin:$SPARK_HOME/sbin
+...
+export SPARK_HOME
+
+export SPARK_HOME=/usr/local/spark
+
+>> source .bashrc
+
+
+##spark-env.sh 편집
+cd $SPARK_HOME/conf
+sudo cp spark-env.sh.template spark-env.sh
+
+sudo vim spark=env.sh
+
+export SPARK_HOME=/usr/local/spark
+export SPARK_CONF_DIR=/usr/local/spark/conf
+export JAVA_HOME=/usr/local/lib/jdk1.8.0_341
+export HADOOP_HOME=/usr/local/hadoop
+export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop
+export SPARK_MASTER_WEBUI_PORT=18080
+
+
+##spark-default.conf 편집
+sudo cp /usr/local/spark/conf/spark-defaults.conf.template /usr/local/spark/conf/spark-defaults.conf
+
+sudo vim /usr/local/spark/conf/spark-defaults.conf
+
+#클러스터 매니저 정보
+spark.master        yarn
+
+#spark.eventLog.dir true > 로깅 경로 지정
+spark.eventLog.enabled      true
+spark.eventLog.dir          /usr/local/spark/logs
+
+sudo mkdir -p /usr/local/spark/logs
+sudo chown -R $USER:$USER /usr/local/spark
+
+
+##workers 파일 편집
+>> spark의 workers도 설정해양 함(localhosts는 주석처리)
+
+sudo vim /usr/local/spark/conf/workers
+dn1
+dn2
+dn3
+
+
+##zookeeper 설치
+sudo wget https://dlcdn.apache.org/zookeeper/zookeeper-3.8.0/apache-zookeeper-3.8.0-bin.tar.gz
+
+tar -zxvf apache-zookeeper-3.8.0-bin.tar.gz -C /usr/local
+
+sudo mv /usr/local/apache-zookeeper-3.8.0-bin/ /usr/local/zookeeper
+
+sudo vim /etc/profile
+(추가)
+ZOOKEEPER_HOME=/usr/local/zookeeper
+
+source /etc/profile
+
+#개인 사용자 설정
+echo 'export ZOOKEEPER_HOME=/usr/local/zookeeper' >> ~/.bashrc
+source ~/.bashrc
+
+
+##zookeeper config 설정
+cd $ZOOKEEPER_HOME
+sudo cp ./conf/zoo_sample.cfg ./conf/zoo.cfg
+sudo vim ./conf/zoo.cfg
+
+dataDir=/usr/local/zookeeper/data
+dataLogDir=/usr/local/zookeeper/logs
+
+clientPort=2181
+maxClientCnxns=0
+maxSessionTimeout=180000
+server.1=nn1:2888:3888
+server.2=nn2:2888:3888
+server.3=dn1:2888:3888
+
+sudo mkdir -p /usr/local/zookeeper/data
+sudo mkdir -p /usr/local/zookeeper/logs
+sudo chown -R $USER:$USER /usr/local/zookeeper
+
+sudo vim /usr/local/zookeeper/data/myid
+>> nn1은 '1', nn2은 '2', dn1은 '3'
+
+$ZOOKEEPER_HOME/bin/zkServer.sh start
+$ZOOKEEPER_HOME/bin/zkServer.sh status
+
+
+##hadoop 실행
+
+#os에 맞는 format으로 설정초기화
+hdfs namenode -format
+
+#journalnode 확인 및 실행
+hadoop-daemon.sh start journalnode
+hadoop-daemon.sh status journalnode
+
+#namenode 실행
+nn1 -hdfs --daemon start namenode
+
+#namenode2 실행
+nn2 -hdfs --daemon start namenode
+nn3 -hdfs namenode -bootstrapStandby
+
+#nn1, nn2, dn1, dn2, dn3, jn 다 동작하게 함
+nn1 - start-dfs.sh
+nn1 - start-all.sh로 실행 되었는지 확인
+
+[상태 확인]
+(nn1)
+jps
+24808 jps
+5353 NameNode
+19420 DFXZKFailoverController
+4478 Journalnode
+2628 QuorumPeerMain
+
+(nn2)
+jps
+24808 jps
+5353 NameNode
+19420 DFXZKFailoverController
+4478 Journalnode
+2628 QuorumPeerMain
+
+(dn1~3)
+jps
+3374 jps
+3354 Journalnode
+1022 QuorumPeerMain
+
+
+##yarn 실행
+vim /usr/local/hadoop/etc/hadoop/hadoop-env.sh
+(추가)
+export YARN_CONF_DIR=$HADOOP_HOME/etc/hadoop
+export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+
+start-yarn.sh
+
+[상태 확인]
+(nn1)
+jps
+24808 jps
+5353 NameNode
+19420 DFXZKFailoverController
+4478 Journalnode
+2628 QuorumPeerMain
+19661 ResourceManager   << 정상 출력 되어야함
+
+(dn1)
+jps
+3374 jps
+3354 Journalnode
+1022 QuorumPeerMain
+3010 DataNode           << 출력
+3847 NodeManager        << 출력
+
+
+##Mapreduce historyserver 실행
+
+mapre --daemon start historyserver
+[확인]
+jps
+24808 jps
+5353 NameNode
+19420 DFXZKFailoverController
+4478 Journalnode
+2628 QuorumPeerMain
+19661 ResourceManager
+23346 JobHistoryServer  << 정상 출력 되어야함
+
+
+##실행 상태 확인
+hdfs haadmin -getServiceState namenode1
+hdfs haadmin -getServiceState namenode2
+>> active
+
+
+##파일 생성 test
+hdfs dfs -mkidr /test
+hdfs dfs -ls /
+[출력]
+Found 2 items
+            - root  supergroup      0   [날짜]  /test
+            - root  supergroup      0   [날짜]  /tmp
+
+
+##mapreduece 확인
+#txt 파일 복사
+hdfs dfs -put /usr/local/hadoop/LICENSE.txt /test
+hdfs dfs -ls /test
+[출력]
+Found 1 items
+            - root  supergroup      0   [날짜]  /test/LICENSE.txt
+
+#mapreduce 실행
+yarn jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.2.3.jar wordcount hdfs:///test/LICENSE.txt /test/output
+
+#결과 확인
+hdfs dfs -text /root/part-r-00000
+
+
+##spark 실행
+$SPARK_HOME/sbin/start-all.sh
+
+[상태 확인]
+(nn1)
+jps
+24808 jps
+5353 NameNode
+19420 DFXZKFailoverController
+4478 Journalnode
+2628 QuorumPeerMain
+19661 ResourceManager   
+25839 Master            << 확인
+
+(dn1~3)
+jps
+3374 jps
+3354 Journalnode
+1022 QuorumPeerMain
+3010 DataNode           
+3847 NodeManager        
+5037 workers            << 확인
