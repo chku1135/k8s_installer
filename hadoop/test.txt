@@ -3,7 +3,9 @@
 ##imapala download: https://impala.apache.org/downloads.html
 
 
-##cloudera manager: https://wooyoung85.tistory.com/47
+##cloudera manager: 
+https://kyeonminsu.tistory.com/7
+https://wooyoung85.tistory.com/47
 
 
 
