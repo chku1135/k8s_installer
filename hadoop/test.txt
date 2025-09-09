@@ -1,0 +1,72 @@
+##참고: https://medium.com/@deepak7093/apache-impala-installation-4d6ed1862dfa
+        https://stackoverflow.com/questions/52502493/how-to-install-impala-on-ubuntu
+##imapala download: https://impala.apache.org/downloads.html
+
+
+##cloudera manager: https://wooyoung85.tistory.com/47
+
+
+
+[전 작업]
+sudo apt-get install build-essential git maven
+sudo apt-get install openjdk-8-jdk
+sudo apt-get install libpython-dev cmake
+sudo apt-get install libssl-dev libsasl2-dev
+
+
+1. install postgres
+[이미 설치완료됨]
+
+2. pg_hda.conf 수정
+vim #POSTGRESQL_HOME/main/pg_hda.conf
+
+Type            DATABASE            USER         ADDRESS          METHOD
+local             all               all                             md5      ( 80번째 줄 )
+host              all               all          0.0.0.0/0          md5      ( 80번째 줄 )
+
+#권한 부여
+sudo -u postgres psql postgres
+CREATE ROLE hiveuser LOGIN PASSWORD 'password';
+ALTER ROLE hiveuser WITH CREATEDB;
+
+sudo apt-get install openssh-server
+sudo service ssh start 
+ssh-keygent -t dsa
+
+cat ~/.ssh/id_dsa.pub >> ~/.ssh/authorized_keys
+
+sudo apt-get install ntp
+sudo systemctl resatrt ntp.service
+
+sudo mkdir /var/lib/hadoop-hdfs
+
+#build native toolchain
+sudo apt-get install build-essential git
+sudo apt-get install bison
+sudo apt-get install autoconf automake libtool
+sudo apt-get install libz-dev
+sudo apt-get install libssl-dev
+sudo apt-get install libncurses-dev
+sudo apt-get insatll libsasl2-dev libkrb5-dev
+
+
+git clone https://github.com/cloudera/native-toolchain.git
+cd native-toolchain
+./buildall.sh
+
+#clone impala
+cd /etc
+git clone https://igt-wip-us.apache.org/repos/asf/incubator-impala.git Impala
+cd Impala
+
+##Export variables
+export JAVA_HOME=/usr/lib/jvm/java-7-oracle
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+export LC_ALL="en_US.UTF-8"
+export M2_HOME=/usr/share/maven
+export M2=$M2_HOME/bin
+export PATH=$M2:$PATH
+
+export IMPALA_HOME=/etc/Impala
+export BOOST_LIVRARYDIR=/usr/lib/x86_64-linux-gnu
+
