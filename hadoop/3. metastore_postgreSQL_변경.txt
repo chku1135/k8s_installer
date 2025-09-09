@@ -1,0 +1,88 @@
+#참고: https://spidyweb.tistory.com/240
+
+## hive metastore 변경
+**일반적으로 migration 지원도구 없음.(기존과 동일한 table 생성 후 데이터 새로 적재)
+##postgreSQL_jDBC: https://jdbc.postgresql.org/download/
+
+[사전]
+0. postgres user 생성
+
+1. postgresSQL install
+sudo rpm -Uvh https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+[확인]
+yum repolist
+
+#postgreSQL 11 version 설치
+yum install porstresql11-=server postgresql11-contrib
+
+#설치 파일 권한 부여
+sudo chown -R postgres:postrges /usr/pgsql-11/
+
+#DB 초기화
+/usr/pgsql-11/bin/postgersql-11-setup initdb
+
+#실행
+systemctl enable postgresql-11
+systemctl start porstresq-11
+
+#접속 확인
+su - postgres
+psql
+
+#원격 접속 허용
+vi $PGDATA/postgresql.conf
+listen_address="*"
+
+vi pg_hba.conf
+Type            DATABASE            USER         ADDRESS          METHOD
+local             all               all                             md5      ( 80번째 줄 )
+host              all               all          0.0.0.0/0          md5      ( 80번째 줄 )
+
+#postgresql 재기동
+systemctl restart postgresql-11
+
+
+1. 기존 hive metastore 확인
+vi $HIVE_HOME/conf/hive-site.xml
+<name>javax.jdo.option.ConnectionURL</name>
+>>value 확인(derby)
+
+2. PostgreSQL JDBC > $HIVE_HOME/lib 업로드
+(확인)
+$HIVE_HOME/lib > postgresql-42.2.23.jar 확인
+
+3. PostgreSQL metastore db 생성
+sudo -i -u porstgres
+psql
+
+[user/password 생성]
+CREATE USER postrgres with password 'postgres';
+CREATE DATABASE metastore_db owner=postgres;
+CREATE SCHEMA authorization postgres;
+
+[데이터베이스 정보확인]
+\ㅣ
+>> metastore_db 생성 확인
+
+4. hadoop 계정 > hive-site.xml 수정
+javax.jdo.option.ConnectionURL
+jdbc:postgresql://localhost:5432/metastore_db
+
+javax.jdo.option.ConenctioinDriverName
+org.postgresql.Driver
+
+javax.jdo.option.ConnectionUserName
+postgres
+
+javax.jdo.opction.ConnectionPassword
+postgres
+
+
+5. metastore 초기화 / PostgreSQL 확인
+start-all.sh 하둡 실행
+[스키마 초기화]
+schematool -initSchema -dbType postgres
+
+6. hive 접속 확인
+hive
+
