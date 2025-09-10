@@ -6,6 +6,7 @@
 ##cloudera manager: 
 https://kyeonminsu.tistory.com/7
 https://wooyoung85.tistory.com/47
+https://guide.ncloud-docs.com/docs/hadoop-vpc-18
 
 
 
