@@ -1,0 +1,11 @@
+vue.js 설치(windows)
+
+1. node.js 설치(npm)
+download:  https://nodejs.org/ko/download/
+
+2. vue.js 설치
+참고: https://jiurinie.tistory.com/96
+- npm install -g @vue/cli
+** 폐쇄망 설치 : 	https://songdev.tistory.com/80
+			https://songdev.tistory.com/74
+
