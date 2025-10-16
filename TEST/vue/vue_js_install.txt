@@ -1,0 +1,29 @@
+vue.js 설치(windows)
+참고 : https://icea.tistory.com/1
+
+1. node.js 설치(npm)
+download:  https://nodejs.org/ko/download/
+
+2. vue.js 설치
+참고: https://jiurinie.tistory.com/96
+- npm install -g @vue/cli
+** 폐쇄망 설치 : 	https://songdev.tistory.com/80
+			https://songdev.tistory.com/74
+
+3. Vue 프로젝트 생성
+ - 생성 경로 이동 후 -> vue create ${프로젝트명}
+ **  vue 버전 선택 
+
+4. vue serve 실행
+ - cd ${프로젝트명}
+ - npm run serve
+ -> web 접속 정보 확인 후 브라우저 접속 > 초기 page 확인
+
+5. vue Router 설치
+ ** 설치 전 server 종료 
+ -(프로젝트 디렉토리에서 진행) vue add router 
+
+6. vuetify 설치(vue 템플릿)
+참고 : https://vuetifyjs.com/en/introduction/why-vuetify/ 
+ -(프로젝트 디렉토리에서 진행) vue add vuetify
+ -> web 접속 정보 확인 후 브라우저 접속 > 초기 page 확인
