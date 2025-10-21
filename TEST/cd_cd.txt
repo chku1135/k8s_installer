@@ -1,0 +1,124 @@
+
+1. jenkins 사전 설정
+1-1. Jenkins Docker 권한 부여(pod로 실행되는 경우 권한설정 확인 필요)
+    - sudo usermod -aG docker jenkins
+    - sudo systemctl restart jenkins
+
+2. Harbor 인증 등록
+    - Jenkins -> Manage Jenkins -> Credentials -> Global -> Add Credentials
+     -> Kind: Username with password
+     -> ID, Username, Password 입력
+
+3. K8s 접속 Credentials 등록
+    - Jenkins에 kubeconfig를 등록
+     -> Kind: Secret file / ID, File 해당 클러스트 kubeconfig
+
+4. values.yaml
+
+image:
+  repository: harbor.myconpany.com/springboot/springboot-app    
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+replicaConunt: 2
+
+
+5. chart/springboot-app/templates/deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: {{ .Release.Name }}
+        image: "{{ .Values.Image.repository }}:{{ .Values.image.tag }}"
+        ports: 
+        - containerPort: 8080
+
+6. Jenkinsfile(groovy)
+
+pipeline {
+  agent any
+
+  environment {
+    REGISTRY = "harbor.mycompany.com"
+    PROJECT = "springboot"
+    IMAGE_NAME = "springboot-app"
+    IMAGE_TAG = "${env.BUILD_NUMBER}"
+    HELM_RELEASE = "springboot-app"
+    HELM_CHART_PATH = "char/springboot-app"
+    NAMESPACE = "default"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        git branch: 'main', url: 'https://gitlab.com/mygroup/springboot-app.git'
+      }
+    }
+
+    stage('Build Jar') {
+      steps {
+        sh './mvnw clean package -DskipTests'
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        sh """
+        docker build -t $REGISTRY/$PROJECT/$IMAGE_NAME:$IMAGE_TAG
+        docker tag $REGISTRY/$PROJECT/$IMAGE_NAME:$IMAGE_TAG $REGISTRY/$PROJECT/$IMAGE_NAME:latest
+        """
+      }            
+    }
+
+    stage('Push to Harbor') {
+      steps {
+        withCredentials([usernamePassword(credentialsId:'harbor-cred', usernameVarible: 'HABOR_USER', passwordVariable: 'HABOR_PASS')]) {
+          sh """
+          echo "$HARBOR_PASS" | docker login $REGISTRY -u "$HARBOR_USER" --password-stdin
+          docker push $REGISTRY/$PROJECT/$IMAGE_NAME:IMAGE_TAG
+          docker push $REGISTRY/$PROJECT/$IMAGE_NAME:latest
+          docker logout $REGISTRY
+          """
+          }
+        }
+    }
+
+    stage('Helm Deploy to K8s') {
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+          sh """
+          export KUBECONFIG=$KUBECONFIG_FILE
+
+          helm upgrade --install $HELM_RELEASE $HELM_CHART_PATH \
+          --namespace $NAMESPACE \
+          --set image.repository=$REGISTRY/$PROJECT/$IMAGE_NAME \
+          --set image.tag=$IMAGE_TAG
+          --wait --imeout 120s
+          """ 
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'docker image prune -af || true'
+    }
+  }
+}
