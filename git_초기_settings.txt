@@ -1,0 +1,30 @@
+git 초기 세팅
+
+[github]
+settings > developer settings > personal access tokens > fine-grained tokens
+ > generate new token
+ * cotent > read and write
+
+[local]
+자격증명 관리자 > window 자격 증명 > 일반자격 증명 추가
+ - 인터넷 주소 : git:https://github.com
+ - 사용자 : [사용자 id]
+ - 암호 : [발급한 git token]
+
+[git bash]
+* 사용할 local repository 경로 이동 
+- git init[git 초기화]
+
+- git remote add origin [git 주소]
+- git clone [git 주소]
+
+[test git commit&push]
+* clone repository 경로 이동
+- 수정 및 변경 사항 저장
+- git add . > git status(수정 사항 확인)
+- git commit -m 'test'
+- git push origin [브렌치명]
+  > github 반여 확인
+
+*git add . > git commit -m 'commit message'
+  or git commit -am 'commit message'
