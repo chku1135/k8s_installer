@@ -1,4 +1,5 @@
 git 초기 세팅
+* git 명령어 참고: https://daunje0.tistory.com/6
 
 [github]
 settings > developer settings > personal access tokens > fine-grained tokens
