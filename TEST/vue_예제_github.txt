@@ -5,3 +5,44 @@ https://github.com/smw0807/vue3/tree/main/vite_quasar
 
 vue_front/spring_backend 예제
 https://onethejay.tistory.com/72
+
+
+
+
+vue_study
+
+1. install
+- node.js install
+  > https://nodejs.org/ko/download
+- npm install vue
+- npm install -g @vue/cli
+- npm create [프로젝트명]
+  > vue3 선택
+- npm run serve(실행 test)
+  > localhost:8080
+
+2. add router
+* vue project directory 경로
+- npm install vue-router@4
+
+**github clone 후
+- npm install
+- npm run serve
+> web 확인
+
+**pnpm insatll
+[powershell]
+Invoke-WebRequest https://get.pnpm.io/install.ps1 -UseBasicParsing | Invoke-Expression
+> pnpm install
+npm install --global corepack@latest
+> corepack install
+> pnpm --version
+** error 시 npm install -g pnpm --force
+
+**vue3-vite
+- 초기 install
+  pnpm install
+- 실행
+  pnpm run dev
+- 빌드
+  pnpm run build
