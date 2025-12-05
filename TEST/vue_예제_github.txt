@@ -5,6 +5,9 @@ https://github.com/smw0807/vue3/tree/main/vite_quasar
 
 vue_front/spring_backend 예제
 https://onethejay.tistory.com/72
+- front: https://github.com/onethejay/vue-frontboard
+- backend: https://github.com/onethejay/vue-backboard
+
 =======================================================================
 [UserRepository.java] 유저 생성 test
 import org.junit.jupiter.api.DisplayName;
