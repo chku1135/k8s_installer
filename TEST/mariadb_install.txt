@@ -1,1 +1,11 @@
 참고: https://blog.naver.com/julie0427/223367603979
+
+* DB 대소문자 구분 설정
+ - show variables like 'lower_case_table_names';
+ > value=0 (대소문자 구분)
+ > value=1 (대소분자 구분 없음)
+ or my.cnf 파일 하기내용으로 변경
+jpa:
+    hibernate:
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
