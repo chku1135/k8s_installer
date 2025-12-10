@@ -1,0 +1,109 @@
+LVM 볼륨 확장
+
+1. 볼륨 확인(lvm 확인)
+> df -h
+root@servermanager4:~# df -h
+Filesystem                         Size  Used Avail Use% Mounted on
+tmpfs                              6.3G  1.8M  6.3G   1% /run
+efivarfs                           512K  209K  299K  42% /sys/firmware/efi/efivars
+/dev/mapper/ubuntu--vg-ubuntu--lv   98G   91G  2.1G  98% /
+tmpfs                               32G     0   32G   0% /dev/shm
+tmpfs                              5.0M     0  5.0M   0% /run/lock
+/dev/sda2                          2.0G   96M  1.7G   6% /boot
+/dev/sda1                          1.1G  6.2M  1.1G   1% /boot/efi
+tmpfs                              6.3G   12K  6.3G   1% /run/user/1000
+tmpfs                              6.3G   12K  6.3G   1% /run/user/1001
+
+> sudo fdisk -l
+root@servermanager4:~# sudo fdisk -l
+Disk /dev/sda: 6.55 TiB, 7201327243264 bytes, 14065092272 sectors
+Disk model: LOGICAL VOLUME
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 4096 bytes
+I/O size (minimum/optimal): 262144 bytes / 786432 bytes
+Disklabel type: gpt
+Disk identifier: E7A9CB2A-1DE4-4C2D-82B7-369E106DBADD
+
+Device       Start         End     Sectors  Size Type
+/dev/sda1     2048     2203647     2201600    1G EFI System
+/dev/sda2  2203648     6397951     4194304    2G Linux filesystem
+/dev/sda3  6397952 14065088511 14058690560  6.5T Linux filesystem
+
+> sudo lsblk
+root@servermanager4:~# lsblk
+NAME                      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda                         8:0    0  6.5T  0 disk
+├─sda1                      8:1    0    1G  0 part /boot/efi
+├─sda2                      8:2    0    2G  0 part /boot
+└─sda3                      8:3    0  6.5T  0 part
+  └─ubuntu--vg-ubuntu--lv 252:0    0  100G  0 lvm  /
+
+
+2. 물리 볼륨 확인
+> sudo pvscan
+  PV /dev/sda3   VG ubuntu-vg       lvm2 [<6.55 TiB / <6.45 TiB free]
+  Total: 1 [<6.55 TiB] / in use: 1 [<6.55 TiB] / in no VG: 0 [0   ]
+
+3. volume group 상세 확인
+> sudo vgdisplay
+root@servermanager4:~# vgdisplay
+  --- Volume group ---
+  VG Name               ubuntu-vg
+  System ID
+  Format                lvm2
+  Metadata Areas        1
+  Metadata Sequence No  2
+  VG Access             read/write
+  VG Status             resizable
+  MAX LV                0
+  Cur LV                1
+  Open LV               1
+  Max PV                0
+  Cur PV                1
+  Act PV                1
+  VG Size               <6.55 TiB
+  PE Size               4.00 MiB
+  Total PE              1716148
+  Alloc PE / Size       25600 / 100.00 GiB
+  Free  PE / Size       1690548 / <6.45 TiB
+  VG UUID               QXobgi-4JHz-2PkX-g9r3-0QRq-SQcE-yAW1hW
+
+4. 확장할 디바이스 경로 확인
+> sudo lvscan
+  ACTIVE            '/dev/ubuntu-vg/ubuntu-lv' [100.00 GiB] inherit
+
+5. lvm 확인
+> sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+root@servermanager4:~# sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+  Size of logical volume ubuntu-vg/ubuntu-lv changed from 100.00 GiB (25600 extents) to <6.55 TiB (1716148 extents).
+  Logical volume ubuntu-vg/ubuntu-lv successfully resized.
+
+6. type 확인
+> df -Th
+root@servermanager4:~# df -Th
+Filesystem                        Type      Size  Used Avail Use% Mounted on
+tmpfs                             tmpfs     6.3G  1.8M  6.3G   1% /run
+efivarfs                          efivarfs  512K  209K  299K  42% /sys/firmware/efi/efivars
+/dev/mapper/ubuntu--vg-ubuntu--lv ext4       98G   91G  2.1G  98% /
+tmpfs                             tmpfs      32G     0   32G   0% /dev/shm
+tmpfs                             tmpfs     5.0M     0  5.0M   0% /run/lock
+/dev/sda2                         ext4      2.0G   96M  1.7G   6% /boot
+/dev/sda1                         vfat      1.1G  6.2M  1.1G   1% /boot/efi
+tmpfs                             tmpfs     6.3G   12K  6.3G   1% /run/user/1000
+tmpfs                             tmpfs     6.3G   12K  6.3G   1% /run/user/1001
+
+7. 최종 설정(type "ext4" 경우)
+> sudo resize2fs /dev/ubuntu-vg/ubuntu-lv
+manager@servermanager4:~$ df -h
+Filesystem                         Size  Used Avail Use% Mounted on
+tmpfs                              6.3G  1.8M  6.3G   1% /run
+efivarfs                           512K  209K  299K  42% /sys/firmware/efi/efivars
+/dev/mapper/ubuntu--vg-ubuntu--lv  6.5T   91G  6.1T   2% /
+tmpfs                               32G     0   32G   0% /dev/shm
+tmpfs                              5.0M     0  5.0M   0% /run/lock
+/dev/sda2                          2.0G   96M  1.7G   6% /boot
+/dev/sda1                          1.1G  6.2M  1.1G   1% /boot/efi
+tmpfs                              6.3G   12K  6.3G   1% /run/user/1000
+tmpfs                              6.3G   12K  6.3G   1% /run/user/1001
+
+
